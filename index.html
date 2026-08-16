@@ -106,7 +106,7 @@
 
         .crash-game-canvas {
             position: relative;
-            background: #0d1233;
+            background: #0b1026;
             border-radius: 12px;
             overflow: hidden;
             border: 1px solid rgba(255, 255, 255, 0.05);
@@ -117,7 +117,7 @@
             display: block;
             width: 100%;
             height: auto;
-            background: #0d1233;
+            background: #0b1026;
         }
 
         .crash-game-status {
@@ -637,7 +637,6 @@
             // CONFIGURATION - AUTO DETECT SERVER URL
             // ============================================
             const CONFIG = {
-                // THIS IS THE FIX - Auto-detect server URL
                 serverUrl: window.location.origin,
                 initialBalance: 1000,
                 canvasHeight: 400,
@@ -1115,155 +1114,115 @@
             }
 
             // ============================================
-            // DRAW GRAPH
+            // DRAW GRAPH - UPDATED VERSION
             // ============================================
             function drawGraph() {
                 if (!canvasCtx) return;
-                var ctx = canvasCtx;
-                var w = canvasWidth;
-                var h = canvasHeight;
 
+                const ctx = canvasCtx;
+                const w = canvasWidth;
+                const h = canvasHeight;
+
+                // Clear
                 ctx.clearRect(0, 0, w, h);
-                ctx.fillStyle = '#0d1233';
+
+                // Background
+                ctx.fillStyle = "#0b1026";
                 ctx.fillRect(0, 0, w, h);
 
-                // Draw grid
-                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                // === CLASSIC GRID (lighter & clean) ===
+                ctx.strokeStyle = "rgba(255,255,255,0.04)";
                 ctx.lineWidth = 1;
-                for (var x = 0; x < w; x += 50) {
+
+                for (let x = 0; x < w; x += 60) {
                     ctx.beginPath();
                     ctx.moveTo(x, 0);
                     ctx.lineTo(x, h);
                     ctx.stroke();
                 }
-                for (var y = 0; y < h; y += 50) {
+                for (let y = 0; y < h; y += 60) {
                     ctx.beginPath();
                     ctx.moveTo(0, y);
                     ctx.lineTo(w, y);
                     ctx.stroke();
                 }
 
-                if (state.status === 'WAITING') {
-                    ctx.fillStyle = 'rgba(136, 146, 176, 0.4)';
-                    ctx.font = '24px "Segoe UI", Arial, sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('⏳ Next round in ' + state.countdown + 's', w / 2, h / 2);
+                // Waiting screen
+                if (state.status === "WAITING") {
+                    ctx.fillStyle = "rgba(255,255,255,0.2)";
+                    ctx.font = "22px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText(`Next round in ${state.countdown}s`, w / 2, h / 2);
                     return;
                 }
 
-                if (state.graphData.length < 2) {
-                    ctx.fillStyle = 'rgba(136, 146, 176, 0.4)';
-                    ctx.font = '20px "Segoe UI", Arial, sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('⏳ Waiting for round to start...', w / 2, h / 2);
-                    return;
-                }
+                if (state.graphData.length < 2) return;
 
-                // Calculate scale
-                var maxMultiplier = Math.max.apply(null, state.graphData.map(function(d) { return d.multiplier; }));
-                if (state.crashPoint > maxMultiplier) maxMultiplier = state.crashPoint;
-                if (maxMultiplier < 2.0) maxMultiplier = 2.0;
-                var scaleY = h / (maxMultiplier - 1);
+                // === SCALE ===
+                let max = Math.max(...state.graphData.map(p => p.multiplier));
+                if (state.crashPoint > max) max = state.crashPoint;
+                if (max < 2) max = 2;
 
-                // Draw curve
+                const scaleY = h / (max - 1);
+
+                // === DRAW CURVE (smooth + thin) ===
                 ctx.beginPath();
-                for (var i = 0; i < state.graphData.length; i++) {
-                    var xPos = (i / (state.graphData.length + 10)) * w;
-                    var yPos = h - ((state.graphData[i].multiplier - 1) * scaleY);
-                    yPos = Math.min(yPos, h - 5);
-                    yPos = Math.max(5, yPos);
-                    if (i === 0) ctx.moveTo(xPos, yPos);
-                    else ctx.lineTo(xPos, yPos);
+
+                for (let i = 0; i < state.graphData.length; i++){
+                    const x = (i / (state.graphData.length + 5)) * w;
+                    const y = h - ((state.graphData[i].multiplier - 1) * scaleY);
+
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
                 }
 
-                // Line color based on status
-                if (state.status === 'CRASHED') {
-                    ctx.strokeStyle = '#ff4757';
-                    ctx.shadowColor = '#ff4757';
-                } else {
-                    ctx.strokeStyle = '#ffd93d';
-                    ctx.shadowColor = '#ffd93d';
-                }
-
-                ctx.lineWidth = 3;
-                ctx.shadowBlur = 15;
+                // Classic yellow line
+                ctx.strokeStyle = "#ffcc00";
+                ctx.lineWidth = 2;
                 ctx.stroke();
-                ctx.shadowBlur = 0;
 
-                // Fill under curve
-                if (state.status !== 'CRASHED') {
-                    ctx.beginPath();
-                    ctx.moveTo(0, h);
-                    for (var j = 0; j < state.graphData.length; j++) {
-                        var xPos2 = (j / (state.graphData.length + 10)) * w;
-                        var yPos2 = h - ((state.graphData[j].multiplier - 1) * scaleY);
-                        yPos2 = Math.min(yPos2, h - 5);
-                        yPos2 = Math.max(5, yPos2);
-                        ctx.lineTo(xPos2, yPos2);
-                    }
-                    ctx.lineTo((state.graphData.length - 1) / (state.graphData.length + 10) * w, h);
-                    ctx.closePath();
-                    var fillGrad = ctx.createLinearGradient(0, 0, 0, h);
-                    fillGrad.addColorStop(0, 'rgba(255, 217, 61, 0.12)');
-                    fillGrad.addColorStop(1, 'rgba(255, 217, 61, 0.01)');
-                    ctx.fillStyle = fillGrad;
-                    ctx.fill();
-                }
+                // === LIGHT FILL ===
+                ctx.lineTo(w, h);
+                ctx.lineTo(0, h);
+                ctx.closePath();
 
-                // Crash line
-                if (state.isCrashed && state.crashPoint > 0) {
-                    var crashY = h - ((state.crashPoint - 1) * scaleY);
-                    crashY = Math.min(crashY, h - 5);
-                    crashY = Math.max(5, crashY);
+                const gradient = ctx.createLinearGradient(0, 0, 0, h);
+                gradient.addColorStop(0, "rgba(255,204,0,0.15)");
+                gradient.addColorStop(1, "rgba(255,204,0,0.01)");
 
-                    ctx.shadowColor = 'rgba(255, 71, 87, 0.4)';
-                    ctx.shadowBlur = 30;
-                    ctx.strokeStyle = '#ff4757';
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([8, 6]);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                // === CRASH LINE ===
+                if (state.status === "CRASHED") {
+                    const crashY = h - ((state.crashPoint - 1) * scaleY);
+
+                    ctx.setLineDash([6, 6]);
+                    ctx.strokeStyle = "#ff3b3b";
+                    ctx.lineWidth = 1.5;
+
                     ctx.beginPath();
                     ctx.moveTo(0, crashY);
                     ctx.lineTo(w, crashY);
                     ctx.stroke();
-                    ctx.setLineDash([]);
-                    ctx.shadowBlur = 0;
 
-                    ctx.shadowColor = 'rgba(255, 71, 87, 0.5)';
-                    ctx.shadowBlur = 20;
-                    ctx.fillStyle = '#ff4757';
-                    ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
-                    ctx.textAlign = 'right';
-                    ctx.textBaseline = 'bottom';
-                    ctx.fillText('💥 ' + state.crashPoint.toFixed(2) + 'x', w - 15, crashY - 10);
-                    ctx.shadowBlur = 0;
+                    ctx.setLineDash([]);
+
+                    ctx.fillStyle = "#ff3b3b";
+                    ctx.font = "bold 16px Arial";
+                    ctx.textAlign = "right";
+                    ctx.fillText(state.crashPoint.toFixed(2) + "x", w - 10, crashY - 5);
                 }
 
-                // Multiplier label
-                if (state.status === 'RUNNING' && state.graphData.length > 0) {
-                    var lastPoint = state.graphData[state.graphData.length - 1];
-                    var labelX = w - 80;
-                    var labelY = h - ((lastPoint.multiplier - 1) * scaleY) - 10;
-                    labelY = Math.max(30, Math.min(labelY, h - 10));
+                // === LIVE MULTIPLIER LABEL ===
+                if (state.status === "RUNNING") {
+                    const last = state.graphData[state.graphData.length - 1];
+                    const y = h - ((last.multiplier - 1) * scaleY);
 
-                    ctx.fillStyle = 'rgba(10, 14, 39, 0.85)';
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-                    ctx.beginPath();
-                    if (ctx.roundRect) {
-                        ctx.roundRect(labelX, labelY - 15, 70, 36, 8);
-                    } else {
-                        ctx.rect(labelX, labelY - 15, 70, 36);
-                    }
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-
-                    ctx.fillStyle = '#fff';
-                    ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(lastPoint.multiplier.toFixed(2) + 'x', labelX + 35, labelY + 3);
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "bold 16px Arial";
+                    ctx.textAlign = "right";
+                    ctx.fillText(last.multiplier.toFixed(2) + "x", w - 10, y - 5);
                 }
             }
 
@@ -1600,7 +1559,6 @@
                             });
                             DOM.playerList.innerHTML = html;
 
-                            // Update live bets
                             var betsHtml = '';
                             data.forEach(function(player) {
                                 var status = player.cashedOut ? 'cashed' : 'active';
@@ -1675,13 +1633,11 @@
                 console.log('🚀 Aviator Game initializing...');
                 console.log('📍 Server URL:', CONFIG.serverUrl);
 
-                // Check if container exists
                 if (!document.getElementById('crash-game-app')) {
                     console.error('❌ #crash-game-app not found!');
                     return;
                 }
 
-                // Check if already initialized
                 if (document.querySelector('#crash-game-app .crash-game-widget')) {
                     console.log('⚠️ Game already initialized');
                     return;
@@ -1695,7 +1651,6 @@
                     return;
                 }
 
-                // Expose API
                 window.crashGame = {
                     setBetAmount: setBetAmount,
                     forceGameStart: forceGameStart,
@@ -1719,7 +1674,6 @@
                 console.log('💡 To manually start, type: window.crashGame.forceGameStart()');
                 console.log('💡 Server URL:', CONFIG.serverUrl);
 
-                // Check if server is reachable
                 fetch(CONFIG.serverUrl + '/health')
                     .then(function(response) {
                         if (response.ok) {
