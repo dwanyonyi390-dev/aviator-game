@@ -10,7 +10,9 @@ const cookieParser = require('cookie-parser');
 const app = express();
 const server = http.createServer(app);
 
-// Middleware
+// ============================================
+// MIDDLEWARE
+// ============================================
 app.use(cors({ 
     origin: '*', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -25,7 +27,7 @@ app.use(express.static(path.join(__dirname)));
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-this-in-production';
 
 // ============================================
-// DATABASE (In-memory for demo - use MongoDB/PostgreSQL for production)
+// DATABASE (In-memory for demo)
 // ============================================
 const users = [];
 const sessions = new Map();
@@ -185,49 +187,11 @@ app.get('/api/me', (req, res) => {
     }
 });
 
-// Protected game route
-app.get('/game', (req, res) => {
-    // Check if user is authenticated via cookie
-    const token = req.cookies.token;
-    if (!token) {
-        return res.redirect('/login');
-    }
-    
-    try {
-        jwt.verify(token, JWT_SECRET);
-        res.sendFile(path.join(__dirname, 'index.html'));
-    } catch (error) {
-        res.redirect('/login');
-    }
-});
-
-// Auth check middleware for Socket.IO
-function authenticateSocket(socket, next) {
-    try {
-        const token = socket.handshake.auth.token || socket.handshake.headers.cookie?.split('token=')[1]?.split(';')[0];
-        
-        if (!token) {
-            return next(new Error('Authentication required'));
-        }
-        
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = users.find(u => u.id === decoded.id);
-        
-        if (!user) {
-            return next(new Error('User not found'));
-        }
-        
-        socket.user = user;
-        next();
-    } catch (error) {
-        next(new Error('Invalid token'));
-    }
-}
-
 // ============================================
 // SERVE PAGES
 // ============================================
 
+// Root route - redirect to game if logged in, otherwise login
 app.get('/', (req, res) => {
     const token = req.cookies.token;
     if (token) {
@@ -241,6 +205,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
 
+// Login page
 app.get('/login', (req, res) => {
     const token = req.cookies.token;
     if (token) {
@@ -252,6 +217,7 @@ app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
 
+// Register page
 app.get('/register', (req, res) => {
     const token = req.cookies.token;
     if (token) {
@@ -263,17 +229,38 @@ app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
 });
 
+// Protected game route
+app.get('/game', (req, res) => {
+    const token = req.cookies.token;
+    if (!token) {
+        return res.redirect('/login');
+    }
+    
+    try {
+        jwt.verify(token, JWT_SECRET);
+        res.sendFile(path.join(__dirname, 'index.html'));
+    } catch (error) {
+        res.redirect('/login');
+    }
+});
+
+// Redirect index.html to game
 app.get('/index.html', (req, res) => {
     res.redirect('/game');
 });
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), users: users.length });
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(), 
+        users: users.length,
+        gameStatus: gameState.status
+    });
 });
 
 // ============================================
-// SOCKET.IO WITH AUTH
+// SOCKET.IO SETUP
 // ============================================
 
 const io = socketIo(server, {
@@ -282,7 +269,9 @@ const io = socketIo(server, {
         methods: ['GET', 'POST']
     },
     transports: ['websocket', 'polling'],
-    allowEIO3: true
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 // Auth middleware for socket
@@ -397,7 +386,11 @@ function startRound() {
             return;
         }
 
-        io.emit('game:update', { multiplier: gameState.multiplier, roundId: gameState.roundId });
+        io.emit('game:update', { 
+            multiplier: gameState.multiplier, 
+            roundId: gameState.roundId 
+        });
+
     }, 50);
 }
 
@@ -405,6 +398,7 @@ function crash() {
     gameState.status = 'CRASHED';
     gameState.isCrashed = true;
 
+    // Process bets
     playerBets.forEach(bet => {
         if (!bet.cashedOut) {
             // Find user and deduct balance
@@ -419,6 +413,7 @@ function crash() {
         }
     });
 
+    // Add to history
     gameState.history.push({
         roundId: gameState.roundId,
         crashPoint: gameState.crashPoint,
@@ -429,7 +424,10 @@ function crash() {
         gameState.history.shift();
     }
 
-    io.emit('game:crash', { roundId: gameState.roundId, multiplier: gameState.crashPoint });
+    io.emit('game:crash', { 
+        roundId: gameState.roundId, 
+        multiplier: gameState.crashPoint 
+    });
 
     if (gameInterval) {
         clearInterval(gameInterval);
@@ -462,6 +460,8 @@ io.on('connection', (socket) => {
 
     // Place Bet
     socket.on('bet:place', (data) => {
+        console.log('📝 Bet placed by:', socket.user.username, data);
+        
         if (gameState.status !== 'WAITING') {
             socket.emit('bet:error', { error: 'Bets are closed for this round' });
             return;
@@ -500,10 +500,13 @@ io.on('connection', (socket) => {
         });
 
         broadcastPlayerList();
+        console.log(`✅ ${socket.user.username} bet $${amount}`);
     });
 
     // Cash Out
     socket.on('bet:cashout', () => {
+        console.log('💰 Cashout requested by:', socket.user.username);
+        
         const bet = playerBets.find(b => b.socketId === socket.id);
         
         if (!bet) {
@@ -532,15 +535,19 @@ io.on('connection', (socket) => {
                 payout: payout,
                 balance: user.balance
             });
+            
+            console.log(`💰 ${socket.user.username} cashed out at ${gameState.multiplier.toFixed(2)}x for $${payout.toFixed(2)}`);
         }
 
         broadcastPlayerList();
     });
 
+    // History request
     socket.on('game:history', () => {
         socket.emit('game:history:data', { history: gameState.history });
     });
 
+    // Disconnect
     socket.on('disconnect', () => {
         console.log('🔴 Player disconnected:', socket.user.username);
         const index = playerBets.findIndex(bet => bet.socketId === socket.id);
@@ -556,15 +563,30 @@ io.on('connection', (socket) => {
 // ============================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`\n🚀 Aviator Game Server running on port ${PORT}`);
     console.log(`📍 http://localhost:${PORT}`);
-    console.log(`👤 Users: ${users.length}`);
+    console.log(`👤 Users registered: ${users.length}`);
+    console.log(`🎮 Game status: ${gameState.status}`);
+    console.log(`\n✅ Server is ready!\n`);
     startCountdown();
 });
 
+// Graceful shutdown
 process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down...');
+    console.log('\n🛑 Shutting down server...');
     if (gameInterval) clearInterval(gameInterval);
     if (countdownInterval) clearInterval(countdownInterval);
-    server.close(() => { console.log('✅ Closed'); process.exit(0); });
+    server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
+    });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
