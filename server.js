@@ -41,7 +41,6 @@ app.post('/api/register', async (req, res) => {
     try {
         const { email, password, username } = req.body;
         
-        // Validation
         if (!email || !password || !username) {
             return res.status(400).json({ error: 'All fields are required' });
         }
@@ -50,7 +49,6 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
         }
         
-        // Check if user exists
         if (users.find(u => u.email === email)) {
             return res.status(400).json({ error: 'Email already registered' });
         }
@@ -59,10 +57,8 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Username already taken' });
         }
         
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        // Create user
         const user = {
             id: Date.now().toString(),
             email,
@@ -74,10 +70,8 @@ app.post('/api/register', async (req, res) => {
         
         users.push(user);
         
-        // Generate JWT
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         
-        // Set cookie
         res.cookie('token', token, {
             httpOnly: true,
             maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -111,22 +105,18 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password required' });
         }
         
-        // Find user
         const user = users.find(u => u.email === email);
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        // Check password
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        // Generate JWT
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         
-        // Set cookie
         res.cookie('token', token, {
             httpOnly: true,
             maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -191,16 +181,14 @@ app.get('/api/me', (req, res) => {
 // SERVE PAGES
 // ============================================
 
-// Root route - redirect to game if logged in, otherwise login
+// Root route
 app.get('/', (req, res) => {
     const token = req.cookies.token;
     if (token) {
         try {
             jwt.verify(token, JWT_SECRET);
             return res.redirect('/game');
-        } catch (error) {
-            // Token invalid, show login
-        }
+        } catch (error) {}
     }
     res.sendFile(path.join(__dirname, 'login.html'));
 });
@@ -254,8 +242,7 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         timestamp: new Date().toISOString(), 
-        users: users.length,
-        gameStatus: gameState.status
+        users: users.length
     });
 });
 
@@ -398,10 +385,8 @@ function crash() {
     gameState.status = 'CRASHED';
     gameState.isCrashed = true;
 
-    // Process bets
     playerBets.forEach(bet => {
         if (!bet.cashedOut) {
-            // Find user and deduct balance
             const user = users.find(u => u.id === bet.userId);
             if (user) {
                 user.balance = Math.max(0, user.balance - bet.amount);
@@ -413,7 +398,6 @@ function crash() {
         }
     });
 
-    // Add to history
     gameState.history.push({
         roundId: gameState.roundId,
         crashPoint: gameState.crashPoint,
@@ -467,7 +451,6 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // Check if user already has a bet
         if (playerBets.find(b => b.socketId === socket.id)) {
             socket.emit('bet:error', { error: 'You already have a bet this round' });
             return;
