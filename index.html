@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 Aviator · Classic Crash</title>
+    <title>Crash Game</title>
     <style>
         /* ============================================
            MAIN STYLES
@@ -1555,7 +1555,9 @@
                         updateUI();
                         addHistoryItem(state.crashPoint);
                         if (!state.hasCashedOut && state.hasBet) {
-                            showToast('💥 Crashed at ' + state.crashPoint.toFixed(2) + 'x', 'info');
+                            showToast('💥 Crashed at ' + state.crashPoint.toFixed(2) + 'x', 'error');
+                            // Reset bet state since player lost
+                            state.hasBet = false;
                         }
                         setTimeout(function() {
                             state.graphData = [];
