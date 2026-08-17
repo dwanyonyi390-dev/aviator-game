@@ -598,7 +598,7 @@
             .crash-game-btn { font-size: 11px; padding: 6px 8px; min-width: 35px; }
         }
 
-        /* Loading screen hidden by default */
+        /* Loading screen */
         #loading-screen {
             display: flex;
             flex-direction: column;
@@ -623,6 +623,10 @@
             border-top-color: #ffd93d;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
+        }
+
+        .game-hidden {
+            display: none !important;
         }
     </style>
 </head>
@@ -662,13 +666,7 @@
                 const user = data.user;
                 console.log('✅ Authenticated as:', user.username);
                 
-                // Hide loading screen
-                const loadingScreen = document.getElementById('loading-screen');
-                if (loadingScreen) {
-                    loadingScreen.classList.add('hidden');
-                }
-                
-                // Start the game
+                // Start the game (loading screen will be hidden inside)
                 startGame(user);
                 
             } catch (error) {
@@ -680,14 +678,14 @@
         // ============================================
         // LOGOUT FUNCTION
         // ============================================
-        async function logout() {
+        window.logout = async function() {
             try {
                 await fetch('/api/logout', { method: 'POST' });
                 window.location.href = '/login';
             } catch (error) {
                 console.error('Logout error:', error);
             }
-        }
+        };
 
         // ============================================
         // GAME FUNCTION
@@ -696,6 +694,12 @@
             'use strict';
             
             console.log('🎮 Starting game for:', user.username);
+            
+            // Hide loading screen
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) {
+                loadingScreen.classList.add('hidden');
+            }
             
             const CONFIG = {
                 initialBalance: 1000,
