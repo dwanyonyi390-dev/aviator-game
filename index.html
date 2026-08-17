@@ -5,8 +5,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🚀 Aviator</title>
     <style>
-        /* ... (same styles as before) ... */
-        /* Add logout button style */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0e27;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .crash-game-container {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            background: #0a0e27;
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .crash-game-widget {
+            width: 100%;
+        }
+
+        .crash-game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 0 5px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .crash-game-title {
+            color: #fff;
+            font-size: 22px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .crash-game-title .plane-icon {
+            font-size: 28px;
+        }
+
+        .crash-game-round-info {
+            color: #8892b0;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .user-info {
+            color: #8892b0;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-info .username {
+            color: #ffd93d;
+            font-weight: 600;
+        }
+
         .logout-btn {
             background: rgba(255, 71, 87, 0.15);
             color: #ff4757;
@@ -18,26 +99,512 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
+
         .logout-btn:hover {
             background: rgba(255, 71, 87, 0.25);
         }
-        .user-info {
+
+        .crash-game-multiplier {
+            text-align: center;
+            padding: 10px 0;
+            margin-bottom: 5px;
+        }
+
+        .crash-game-multiplier .value {
+            font-size: 56px;
+            font-weight: 800;
+            display: inline-block;
+            letter-spacing: -1px;
+            transition: all 0.2s ease;
+        }
+
+        .crash-game-multiplier .value .x-symbol {
+            font-size: 28px;
+            font-weight: 400;
+            opacity: 0.5;
+            margin-left: 2px;
+        }
+
+        .crash-game-multiplier .value.waiting {
+            color: #8892b0;
+        }
+
+        .crash-game-multiplier .value.running {
+            color: #ffd93d;
+            text-shadow: 0 0 30px rgba(255, 217, 61, 0.3);
+            animation: pulseMul 0.6s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulseMul {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.06); }
+        }
+
+        .crash-game-multiplier .value.crashed {
+            color: #ff4757;
+            text-shadow: 0 0 30px rgba(255, 71, 87, 0.3);
+        }
+
+        .crash-game-canvas {
+            position: relative;
+            background: #0b1026;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            margin-bottom: 15px;
+            min-height: 300px;
+        }
+
+        .crash-game-canvas canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            background: #0b1026;
+            min-height: 300px;
+        }
+
+        .crash-game-status {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(4px);
+            z-index: 5;
+        }
+
+        .crash-game-status.waiting {
+            color: #8892b0;
+        }
+
+        .crash-game-status.running {
+            color: #ffd93d;
+            border-color: rgba(255, 217, 61, 0.3);
+        }
+
+        .crash-game-status.crashed {
+            color: #ff4757;
+            border-color: rgba(255, 71, 87, 0.3);
+            animation: pulse 0.5s ease infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.6; }
+            to { opacity: 1; }
+        }
+
+        .crash-game-countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 80px;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.05);
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 3;
+        }
+
+        .crash-game-countdown.active {
+            color: rgba(255, 217, 61, 0.15);
+            font-size: 100px;
+            animation: countdownPulse 0.5s ease infinite alternate;
+        }
+
+        @keyframes countdownPulse {
+            from { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+            to { transform: translate(-50%, -50%) scale(1.1); opacity: 0.6; }
+        }
+
+        .crash-game-panel {
+            display: grid;
+            grid-template-columns: 1fr 280px;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .crash-game-left {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .crash-game-right {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+            max-height: 200px;
+        }
+
+        .crash-game-balance {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 10px 16px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .crash-game-balance .label {
             color: #8892b0;
             font-size: 14px;
+        }
+
+        .crash-game-balance .amount {
+            color: #00d4ff;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .crash-game-balance .amount.negative {
+            color: #ff4757;
+        }
+
+        .crash-game-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .input-group input[type="number"] {
+            flex: 1;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-group input[type="number"]:focus {
+            border-color: #ffd93d;
+        }
+
+        .input-group input[type="number"]:disabled {
+            opacity: 0.3;
+        }
+
+        .input-group input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .crash-game-btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex: 1;
+            min-width: 50px;
+        }
+
+        .crash-game-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        .crash-game-btn:active:not(:disabled) {
+            transform: translateY(0px);
+        }
+
+        .crash-game-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .crash-game-btn.quick {
+            background: rgba(255, 255, 255, 0.06);
+            color: #8892b0;
+            flex: 1;
+        }
+
+        .crash-game-btn.quick:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .crash-game-btn.place {
+            background: linear-gradient(135deg, #00d4ff, #0090ff);
+            color: #fff;
+            flex: 2;
+        }
+
+        .crash-game-btn.place:hover:not(:disabled) {
+            box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .crash-game-btn.cashout {
+            background: linear-gradient(135deg, #ffd93d, #f5a623);
+            color: #0a0e27;
+            flex: 2;
+        }
+
+        .crash-game-btn.cashout:hover:not(:disabled) {
+            box-shadow: 0 4px 20px rgba(255, 217, 61, 0.3);
+        }
+
+        .crash-game-btn.cashout.cashing {
+            animation: cashPulse 0.8s ease infinite alternate;
+        }
+
+        @keyframes cashPulse {
+            from { box-shadow: 0 0 10px rgba(255, 217, 61, 0.2); }
+            to { box-shadow: 0 0 30px rgba(255, 217, 61, 0.6); }
+        }
+
+        .crash-game-player-list {
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .crash-game-player-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .crash-game-player-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .crash-game-player-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .player-item {
             display: flex;
             align-items: center;
-            gap: 12px;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-radius: 6px;
+            margin-bottom: 2px;
+            background: rgba(255, 255, 255, 0.02);
+            font-size: 13px;
         }
-        .user-info .username {
-            color: #ffd93d;
+
+        .player-item .name {
+            color: #8892b0;
+        }
+
+        .player-item .bet-amount {
+            color: #fff;
             font-weight: 600;
+        }
+
+        .player-item .status-badge {
+            font-size: 12px;
+            padding: 2px 10px;
+            border-radius: 12px;
+        }
+
+        .player-item .status-badge.waiting {
+            color: #00d4ff;
+        }
+
+        .player-item .status-badge.cashed {
+            color: #00d4ff;
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .player-item .status-badge.lost {
+            color: #ff4757;
+            background: rgba(255, 71, 87, 0.1);
+        }
+
+        .crash-game-live-bets {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            max-height: 80px;
+            overflow-y: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .crash-game-live-bets::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .crash-game-live-bets::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .crash-game-bet-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.04);
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .crash-game-bet-item .player {
+            color: #8892b0;
+        }
+
+        .crash-game-bet-item .status.active {
+            color: #00d4ff;
+        }
+
+        .crash-game-bet-item .status.cashed {
+            color: #00d4ff;
+            background: rgba(0, 212, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .crash-game-bet-item .status.lost {
+            color: #ff4757;
+            background: rgba(255, 71, 87, 0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .crash-game-bet-feed-empty {
+            color: #8892b0;
+            font-size: 13px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .crash-game-history {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 12px 15px;
+        }
+
+        .crash-game-history .title {
+            color: #8892b0;
+            font-size: 13px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .crash-game-history .grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .crash-game-history .grid .item {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .crash-game-history .grid .item.high {
+            color: #00d4ff;
+            border-color: rgba(0, 212, 255, 0.2);
+        }
+
+        .crash-game-history .grid .item.low {
+            color: #8892b0;
+        }
+
+        .crash-game-toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 28px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 9999;
+            color: #fff;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s ease;
+            max-width: 90%;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .crash-game-toast.success {
+            background: linear-gradient(135deg, #00d4ff, #0090ff);
+        }
+
+        .crash-game-toast.error {
+            background: linear-gradient(135deg, #ff4757, #c0392b);
+        }
+
+        .crash-game-toast.info {
+            background: linear-gradient(135deg, #ffd93d, #f5a623);
+            color: #0a0e27;
+        }
+
+        @media (max-width: 768px) {
+            .crash-game-container { padding: 12px; }
+            .crash-game-panel { grid-template-columns: 1fr; }
+            .crash-game-multiplier .value { font-size: 40px; }
+            .crash-game-header { flex-direction: column; align-items: flex-start; }
+            .header-right { width: 100%; justify-content: space-between; }
+            .crash-game-countdown { font-size: 50px; }
+            .crash-game-countdown.active { font-size: 70px; }
+            .crash-game-btn { font-size: 12px; padding: 6px 10px; min-width: 40px; }
+            .crash-game-right { max-height: 150px; }
+            .crash-game-live-bets { max-height: 60px; }
+        }
+
+        @media (max-width: 480px) {
+            .crash-game-multiplier .value { font-size: 32px; }
+            .crash-game-status { font-size: 11px; padding: 4px 12px; }
+            .crash-game-balance .amount { font-size: 16px; }
+            .input-group input[type="number"] { font-size: 14px; padding: 8px 10px; }
+            .btn-group { gap: 4px; }
+            .crash-game-btn { font-size: 11px; padding: 6px 8px; min-width: 35px; }
         }
     </style>
 </head>
 <body>
+
     <div class="crash-game-container">
         <div id="crash-game-app">
-            <div class="crash-game-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;color:#8892b0;">
+            <!-- Game will be rendered here -->
+            <div id="loading-screen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;color:#8892b0;">
                 <div style="width:50px;height:50px;border:4px solid rgba(255,217,61,0.1);border-top-color:#ffd93d;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
                 <p style="margin-top:20px;font-size:16px;">Loading game...</p>
             </div>
@@ -51,7 +618,7 @@
     </style>
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    
+
     <script>
         // ============================================
         // CHECK AUTHENTICATION
@@ -66,8 +633,14 @@
                 const data = await response.json();
                 window.currentUser = data.user;
                 console.log('✅ Authenticated as:', data.user.username);
+                
+                // Remove loading screen and init game
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                
                 initGame();
             } catch (error) {
+                console.error('Auth error:', error);
                 window.location.href = '/login';
             }
         })();
@@ -90,6 +663,8 @@
         function initGame() {
             'use strict';
 
+            console.log('🎮 Initializing game...');
+
             const CONFIG = {
                 serverUrl: window.location.origin,
                 initialBalance: 1000,
@@ -107,6 +682,7 @@
             let planeX = 0;
             let planeY = 0;
             let explosion = { active: false, x: 0, y: 0, radius: 0 };
+            let gameLoopInterval = null;
 
             const state = {
                 status: 'WAITING',
@@ -151,7 +727,10 @@
 
             function createGameHTML() {
                 const app = document.getElementById('crash-game-app');
-                if (!app) return false;
+                if (!app) {
+                    console.error('❌ App container not found');
+                    return false;
+                }
 
                 app.innerHTML = `
                     <div class="crash-game-widget">
@@ -159,7 +738,7 @@
                             <div class="crash-game-title">
                                 <span class="plane-icon">✈️</span> AVIATOR
                             </div>
-                            <div style="display:flex;align-items:center;gap:12px;">
+                            <div class="header-right">
                                 <div class="user-info">
                                     👤 <span class="username">${state.username}</span>
                                 </div>
@@ -215,6 +794,7 @@
                     </div>
                 `;
 
+                // Get DOM references
                 DOM = {
                     multiplier: document.getElementById('multiplierDisplay'),
                     statusBadge: document.getElementById('statusBadge'),
@@ -230,7 +810,15 @@
                     playerList: document.getElementById('playerList')
                 };
 
-                setupEventListeners();
+                // Verify all elements exist
+                for (let key in DOM) {
+                    if (!DOM[key]) {
+                        console.error(`❌ DOM element ${key} not found`);
+                        return false;
+                    }
+                }
+
+                console.log('✅ Game HTML created successfully');
                 return true;
             }
 
@@ -260,6 +848,8 @@
                     this.value = val;
                     state.betAmount = val;
                 };
+
+                console.log('✅ Event listeners set up');
             }
 
             function handlePlaceBet() {
@@ -347,24 +937,35 @@
             }
 
             function initCanvas() {
-                if (!DOM.canvas) return;
+                if (!DOM.canvas) {
+                    console.error('❌ Canvas element not found');
+                    return;
+                }
+                
                 const rect = DOM.canvas.parentElement.getBoundingClientRect();
-                canvasWidth = DOM.canvas.width = Math.min(rect.width || 800, 800);
-                canvasHeight = DOM.canvas.height = 400;
+                const width = Math.min(rect.width || 800, 800);
+                const height = 400;
+                
+                canvasWidth = DOM.canvas.width = width;
+                canvasHeight = DOM.canvas.height = height;
                 canvasCtx = DOM.canvas.getContext('2d');
+                
+                console.log(`✅ Canvas initialized: ${canvasWidth}x${canvasHeight}`);
                 drawGraph();
             }
 
             function drawGraph() {
                 if (!canvasCtx) return;
+                
                 const ctx = canvasCtx;
-                const w = canvasWidth;
-                const h = canvasHeight;
+                const w = canvasWidth || 800;
+                const h = canvasHeight || 400;
 
                 ctx.clearRect(0, 0, w, h);
                 ctx.fillStyle = "#0b1026";
                 ctx.fillRect(0, 0, w, h);
 
+                // Grid
                 ctx.strokeStyle = "rgba(255,255,255,0.04)";
                 ctx.lineWidth = 1;
                 for (let x = 0; x < w; x += 60) {
@@ -399,6 +1000,7 @@
                 planeX = (lastIndex / (state.graphData.length + 5)) * w;
                 planeY = h - ((state.graphData[lastIndex].multiplier - 1) * scaleY);
 
+                // Draw curve
                 ctx.beginPath();
                 for (let i = 0; i < state.graphData.length - 1; i++) {
                     const p0 = state.graphData[i];
@@ -419,6 +1021,7 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0;
 
+                // Fill
                 ctx.lineTo(w, h);
                 ctx.lineTo(0, h);
                 ctx.closePath();
@@ -428,6 +1031,7 @@
                 ctx.fillStyle = grad;
                 ctx.fill();
 
+                // Fire trail
                 if (state.status === "RUNNING") {
                     fireTrail.push({ x: planeX, y: planeY });
                     if (fireTrail.length > 25) fireTrail.shift();
@@ -442,6 +1046,7 @@
                     }
                 }
 
+                // Plane
                 if (state.status === "RUNNING") {
                     ctx.save();
                     ctx.translate(planeX, planeY);
@@ -470,6 +1075,7 @@
                     ctx.restore();
                 }
 
+                // Explosion
                 if (state.status === "CRASHED" && explosion.active) {
                     explosion.radius += 4;
                     ctx.beginPath();
@@ -483,6 +1089,7 @@
                     if (explosion.radius > 60) explosion.active = false;
                 }
 
+                // Crash line
                 if (state.status === "CRASHED") {
                     const crashY = h - ((state.crashPoint - 1) * scaleY);
                     ctx.setLineDash([6, 6]);
@@ -499,6 +1106,7 @@
                     ctx.fillText(state.crashPoint.toFixed(2) + "x", w - 10, crashY - 8);
                 }
 
+                // Live label
                 if (state.status === "RUNNING") {
                     ctx.fillStyle = "#ffffff";
                     ctx.font = "bold 14px Arial";
@@ -511,7 +1119,10 @@
             }
 
             function updateUI() {
-                if (!DOM.multiplier) return;
+                if (!DOM.multiplier) {
+                    console.warn('⚠️ DOM not ready for UI update');
+                    return;
+                }
 
                 if (state.status === 'WAITING') {
                     DOM.multiplier.className = 'value waiting';
@@ -587,11 +1198,14 @@
 
                     const token = getToken();
                     if (!token) {
+                        console.error('❌ No token found');
                         window.location.href = '/login';
                         return;
                     }
 
-                    state.socket = io(CONFIG.serverUrl, {
+                    console.log('🔌 Connecting to socket with auth...');
+                    
+                    state.socket = io({
                         transports: ['websocket', 'polling'],
                         reconnection: true,
                         reconnectionAttempts: 5,
@@ -601,6 +1215,7 @@
 
                     state.socket.on('connect', () => {
                         state.isConnected = true;
+                        console.log('✅ Socket connected');
                         showToast('Connected!', 'success');
                         state.socket.emit('game:history');
                         updateUI();
@@ -608,6 +1223,7 @@
 
                     state.socket.on('connect_error', (error) => {
                         state.isConnected = false;
+                        console.error('❌ Socket connection error:', error);
                         if (error.message === 'Authentication required') {
                             window.location.href = '/login';
                         } else {
@@ -617,6 +1233,7 @@
 
                     state.socket.on('disconnect', () => {
                         state.isConnected = false;
+                        console.log('🔌 Socket disconnected');
                         showToast('Disconnected', 'error');
                     });
 
@@ -640,9 +1257,11 @@
                         state.hasCashedOut = false;
                         state.cashoutPending = false;
                         state.running = false;
-                        DOM.cashout.disabled = true;
-                        DOM.cashout.textContent = 'CASH OUT';
-                        DOM.cashout.classList.remove('cashing');
+                        if (DOM.cashout) {
+                            DOM.cashout.disabled = true;
+                            DOM.cashout.textContent = 'CASH OUT';
+                            DOM.cashout.classList.remove('cashing');
+                        }
                         updateUI();
                     });
 
@@ -671,9 +1290,11 @@
                         explosion.y = planeY || 200;
                         explosion.radius = 0;
 
-                        DOM.cashout.disabled = true;
-                        DOM.cashout.textContent = 'CASHED OUT';
-                        DOM.cashout.classList.remove('cashing');
+                        if (DOM.cashout) {
+                            DOM.cashout.disabled = true;
+                            DOM.cashout.textContent = 'CASHED OUT';
+                            DOM.cashout.classList.remove('cashing');
+                        }
 
                         updateUI();
                         addHistoryItem(state.crashPoint);
@@ -695,9 +1316,13 @@
                     state.socket.on('bet:confirmed', (data) => {
                         state.hasBet = true;
                         state.balance = data.balance || state.balance;
-                        DOM.placeBet.disabled = true;
-                        DOM.placeBet.textContent = 'BET PLACED';
-                        DOM.betAmount.disabled = true;
+                        if (DOM.placeBet) {
+                            DOM.placeBet.disabled = true;
+                            DOM.placeBet.textContent = 'BET PLACED';
+                        }
+                        if (DOM.betAmount) {
+                            DOM.betAmount.disabled = true;
+                        }
                         updateUI();
                     });
 
@@ -705,9 +1330,11 @@
                         state.hasCashedOut = true;
                         state.balance = data.balance || state.balance;
                         state.cashoutPending = false;
-                        DOM.cashout.textContent = '✅ CASHED';
-                        DOM.cashout.disabled = true;
-                        DOM.cashout.classList.remove('cashing');
+                        if (DOM.cashout) {
+                            DOM.cashout.textContent = '✅ CASHED';
+                            DOM.cashout.disabled = true;
+                            DOM.cashout.classList.remove('cashing');
+                        }
                         updateUI();
                         showToast('💰 Cashed at ' + (data.multiplier || 0).toFixed(2) + 'x - Won $' + (data.payout || 0).toFixed(2), 'success');
                     });
@@ -766,33 +1393,55 @@
                     });
 
                 } catch (error) {
-                    console.error('Socket error:', error);
+                    console.error('❌ Socket setup error:', error);
                 }
             }
 
             function init() {
                 console.log('🚀 Initializing game...');
-                if (!document.getElementById('crash-game-app')) return;
-                if (document.querySelector('#crash-game-app .crash-game-widget')) return;
-
-                if (!createGameHTML()) return;
-                setTimeout(initCanvas, 100);
-                setupSocket();
-
-                let resizeTimeout;
-                window.addEventListener('resize', () => {
-                    clearTimeout(resizeTimeout);
-                    resizeTimeout = setTimeout(() => initCanvas(), 200);
-                });
-
-                setTimeout(updateUI, 200);
-                setInterval(() => {
-                    if (explosion.active) {
-                        explosion.radius += 3;
-                        if (explosion.radius > 60) explosion.active = false;
+                
+                try {
+                    // Create game HTML
+                    if (!createGameHTML()) {
+                        console.error('❌ Failed to create game HTML');
+                        return;
                     }
-                    updateUI();
-                }, 50);
+
+                    // Setup event listeners
+                    setupEventListeners();
+
+                    // Initialize canvas
+                    setTimeout(initCanvas, 100);
+
+                    // Setup socket
+                    setupSocket();
+
+                    // Handle resize
+                    let resizeTimeout;
+                    window.addEventListener('resize', () => {
+                        clearTimeout(resizeTimeout);
+                        resizeTimeout = setTimeout(() => initCanvas(), 200);
+                    });
+
+                    // Start UI update loop
+                    setTimeout(updateUI, 200);
+                    
+                    // Game loop
+                    if (gameLoopInterval) clearInterval(gameLoopInterval);
+                    gameLoopInterval = setInterval(() => {
+                        if (explosion.active) {
+                            explosion.radius += 3;
+                            if (explosion.radius > 60) explosion.active = false;
+                        }
+                        updateUI();
+                    }, 50);
+
+                    console.log('✅ Game initialized successfully');
+                    
+                } catch (error) {
+                    console.error('❌ Game initialization error:', error);
+                    showToast('Failed to initialize game', 'error');
+                }
             }
 
             // Start the game
