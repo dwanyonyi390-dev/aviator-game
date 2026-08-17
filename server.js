@@ -23,9 +23,6 @@ const io = socketIo(server, {
     transports: ['websocket', 'polling']
 });
 
-// ============================================
-// GAME STATE
-// ============================================
 const gameState = {
     status: 'WAITING',
     roundId: 0,
@@ -44,9 +41,6 @@ const CONFIG = {
     INITIAL_BALANCE: 1000
 };
 
-// ============================================
-// HELPERS
-// ============================================
 function generateCrashPoint() {
     const r = Math.random();
     if (r < 0.20) return 1.0 + Math.random() * 0.5;
@@ -79,9 +73,6 @@ function broadcastPlayerList() {
     io.emit('player:list', activePlayers);
 }
 
-// ============================================
-// GAME LOOP
-// ============================================
 let gameInterval = null;
 let countdownInterval = null;
 
@@ -178,13 +169,11 @@ function crash() {
     }
 
     playerBets.length = 0;
+    broadcastPlayerList();
 
     setTimeout(() => startCountdown(), 3000);
 }
 
-// ============================================
-// SOCKET EVENTS
-// ============================================
 io.on('connection', (socket) => {
     console.log('🟢 Player connected:', socket.id);
     const player = getPlayer(socket.id);
@@ -200,7 +189,6 @@ io.on('connection', (socket) => {
     socket.emit('player:data', { balance: player.balance });
     socket.emit('game:history:data', { history: gameState.history });
 
-    // Place Bet
     socket.on('bet:place', (data) => {
         const player = getPlayer(socket.id);
 
@@ -236,9 +224,9 @@ io.on('connection', (socket) => {
         broadcastPlayerList();
     });
 
-    // Cash Out - FIXED: No data expected
+    // FIXED: This now works correctly - no data expected
     socket.on('bet:cashout', () => {
-        console.log('💰 Cashout requested by:', socket.id);
+        console.log('💰 Cashout from:', socket.id);
         const player = getPlayer(socket.id);
 
         if (gameState.status !== 'RUNNING') {
@@ -271,6 +259,7 @@ io.on('connection', (socket) => {
         });
 
         broadcastPlayerList();
+        console.log(`✅ Cashed out: $${payout.toFixed(2)} at ${gameState.multiplier.toFixed(2)}x`);
     });
 
     socket.on('game:history', () => {
@@ -285,9 +274,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// ============================================
-// START SERVER
-// ============================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
