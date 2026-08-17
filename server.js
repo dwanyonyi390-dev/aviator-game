@@ -121,6 +121,7 @@ function startRound() {
     gameState.crashPoint = generateCrashPoint();
     gameState.isCrashed = false;
 
+    // Reset player cashout status
     players.forEach((player) => {
         player.cashedOut = false;
     });
@@ -161,9 +162,11 @@ function crash() {
     gameState.status = 'CRASHED';
     gameState.isCrashed = true;
 
+    // Process all players who haven't cashed out
     players.forEach((player, socketId) => {
         if (player.hasBet && !player.cashedOut) {
-            player.balance -= player.betAmount;
+            // Player loses their bet
+            player.balance = Math.max(0, player.balance - player.betAmount);
             player.hasBet = false;
             io.to(socketId).emit('bet:lost', {
                 amount: player.betAmount,
@@ -174,6 +177,7 @@ function crash() {
         player.betAmount = 0;
     });
 
+    // Add to history
     gameState.history.push({
         roundId: gameState.roundId,
         crashPoint: gameState.crashPoint,
@@ -189,6 +193,7 @@ function crash() {
         multiplier: gameState.crashPoint
     });
 
+    // Send updated balances
     players.forEach((player, socketId) => {
         io.to(socketId).emit('player:data', {
             balance: player.balance
@@ -199,6 +204,9 @@ function crash() {
         clearInterval(gameInterval);
         gameInterval = null;
     }
+
+    // Clear player bets
+    playerBets.length = 0;
 
     setTimeout(() => {
         startCountdown();
@@ -273,8 +281,9 @@ io.on('connection', (socket) => {
         broadcastPlayerList();
     });
 
-    // Handle cash out
-    socket.on('bet:cashout', () => {
+    // Handle cash out - FIXED: properly handles the event
+    socket.on('bet:cashout', (data) => {
+        console.log('💰 Cashout requested by:', socket.id);
         const player = getPlayer(socket.id);
 
         if (gameState.status !== 'RUNNING') {
@@ -292,16 +301,25 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Calculate payout
         const payout = player.betAmount * gameState.multiplier;
         player.balance += payout;
         player.cashedOut = true;
         player.hasBet = false;
+
+        // Remove from active bets
+        const index = playerBets.findIndex(bet => bet.socketId === socket.id);
+        if (index !== -1) {
+            playerBets.splice(index, 1);
+        }
 
         socket.emit('bet:cashout:confirmed', {
             multiplier: gameState.multiplier,
             payout: payout,
             balance: player.balance
         });
+
+        console.log(`💰 Player ${socket.id} cashed out at ${gameState.multiplier.toFixed(2)}x for $${payout.toFixed(2)}`);
 
         broadcastPlayerList();
     });
