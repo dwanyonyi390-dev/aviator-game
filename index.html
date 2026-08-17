@@ -652,21 +652,51 @@
                 ANCHOR_POINTS: 30
             };
 
-            // ============================================
-            // GLOBAL VARIABLES
-            // ============================================
-            var cameraX = 0;
-            var cameraY = 0;
-            var takeoffProgress = 0;
-            var fireTrail = [];
-            var smoothThickness = 2;
-            var explosion = {
-                active: false,
-                x: 0,
-                y: 0,
-                radius: 0,
-                particles: []
-            };
+           // ============================================
+// GLOBAL VARIABLES (CLASSIC AVIATOR ENGINE)
+// ============================================
+
+// 🎥 Camera (smooth follow)
+var cameraX = 0;
+var cameraY = 0;
+var cameraTargetX = 0;
+var cameraTargetY = 0;
+var cameraSmooth = 0.08;
+
+// ✈️ Plane physics (classic feel)
+var plane = {
+    x: 0,
+    y: 0,
+    angle: 0,
+    velocity: 0,
+    acceleration: 0.0025,
+    maxVelocity: 2.5
+};
+
+// 🚀 Takeoff animation
+var takeoffProgress = 0;
+var takeoffSpeed = 0.02;
+
+// 🔥 Fire trail (clean + classic)
+var fireTrail = [];
+var trailMax = 40;
+var trailFade = 0.92;
+var trailThickness = 3;
+
+// 🎨 Curve smoothness
+var smoothThickness = 2.5;
+
+// 💥 Explosion system (improved but simple)
+var explosion = {
+    active: false,
+    x: 0,
+    y: 0,
+    radius: 0,
+    maxRadius: 80,
+    growth: 4,
+    particles: [],
+    particleCount: 30
+};
 
             // ============================================
             // DOM REFS
@@ -1116,133 +1146,189 @@
             // ============================================
             // DRAW GRAPH - UPDATED VERSION
             // ============================================
-            function drawGraph() {
-                if (!canvasCtx) return;
+           function drawGraph() {
+    if (!canvasCtx) return;
 
-                const ctx = canvasCtx;
-                const w = canvasWidth;
-                const h = canvasHeight;
+    const ctx = canvasCtx;
+    const w = canvasWidth;
+    const h = canvasHeight;
 
-                // Clear
-                ctx.clearRect(0, 0, w, h);
+    // Clear
+    ctx.clearRect(0, 0, w, h);
 
-                // Background
-                ctx.fillStyle = "#0b1026";
-                ctx.fillRect(0, 0, w, h);
+    // Background
+    ctx.fillStyle = "#0b1026";
+    ctx.fillRect(0, 0, w, h);
 
-                // === CLASSIC GRID (lighter & clean) ===
-                ctx.strokeStyle = "rgba(255,255,255,0.04)";
-                ctx.lineWidth = 1;
+    // === GRID ===
+    ctx.strokeStyle = "rgba(255,255,255,0.04)";
+    ctx.lineWidth = 1;
 
-                for (let x = 0; x < w; x += 60) {
-                    ctx.beginPath();
-                    ctx.moveTo(x, 0);
-                    ctx.lineTo(x, h);
-                    ctx.stroke();
-                }
-                for (let y = 0; y < h; y += 60) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(w, y);
-                    ctx.stroke();
-                }
+    for (let x = 0; x < w; x += 60) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+    }
+    for (let y = 0; y < h; y += 60) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+    }
 
-                // Waiting screen
-                if (state.status === "WAITING") {
-                    ctx.fillStyle = "rgba(255,255,255,0.2)";
-                    ctx.font = "22px Arial";
-                    ctx.textAlign = "center";
-                    ctx.fillText(`Next round in ${state.countdown}s`, w / 2, h / 2);
-                    return;
-                }
+    // WAITING
+    if (state.status === "WAITING") {
+        ctx.fillStyle = "rgba(255,255,255,0.2)";
+        ctx.font = "22px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`Next round in ${state.countdown}s`, w / 2, h / 2);
+        return;
+    }
 
-                if (state.graphData.length < 2) return;
+    if (state.graphData.length < 2) return;
 
-                // === SCALE ===
-                let max = Math.max(...state.graphData.map(p => p.multiplier));
-                if (state.crashPoint > max) max = state.crashPoint;
-                if (max < 2) max = 2;
+    // SCALE
+    let max = Math.max(...state.graphData.map(p => p.multiplier));
+    if (state.crashPoint > max) max = state.crashPoint;
+    if (max < 2) max = 2;
 
-                const scaleY = h / (max - 1);
+    const scaleY = h / (max - 1);
 
-                // === DRAW CURVE (smooth + thin) ===
-                ctx.beginPath();
+    // === DRAW CURVE ===
+   ctx.beginPath();
 
-                for (let i = 0; i < state.graphData.length; i++){
-                    const x = (i / (state.graphData.length + 5)) * w;
-                    const y = h - ((state.graphData[i].multiplier - 1) * scaleY);
+for (let i = 0; i < state.graphData.length - 1; i++) {
+    const p0 = state.graphData[i];
+    const p1 = state.graphData[i + 1];
 
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
+    const x0 = (i / (state.graphData.length + 5)) * w;
+    const y0 = h - ((p0.multiplier - 1) * scaleY);
 
-                // Classic yellow line
-                ctx.strokeStyle = "#ffcc00";
-                ctx.lineWidth = 2;
-                ctx.stroke();
+    const x1 = ((i + 1) / (state.graphData.length + 5)) * w;
+    const y1 = h - ((p1.multiplier - 1) * scaleY);
 
-                // === LIGHT FILL ===
-                ctx.lineTo(w, h);
-                ctx.lineTo(0, h);
-                ctx.closePath();
+    // Control points for smooth curve
+    const cpX = (x0 + x1) / 2;
 
-                const gradient = ctx.createLinearGradient(0, 0, 0, h);
-                gradient.addColorStop(0, "rgba(255,204,0,0.15)");
-                gradient.addColorStop(1, "rgba(255,204,0,0.01)");
+    if (i === 0) {
+        ctx.moveTo(x0, y0);
+    }
 
-                ctx.fillStyle = gradient;
-                ctx.fill();
+    ctx.quadraticCurveTo(cpX, y0, x1, y1);
+}
 
-                // === CRASH LINE ===
-                if (state.status === "CRASHED") {
-                    const crashY = h - ((state.crashPoint - 1) * scaleY);
+    ctx.strokeStyle = "#ffcc00";
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
-                    ctx.setLineDash([6, 6]);
-                    ctx.strokeStyle = "#ff3b3b";
-                    ctx.lineWidth = 1.5;
+    // === FILL ===
+    ctx.lineTo(w, h);
+    ctx.lineTo(0, h);
+    ctx.closePath();
 
-                    ctx.beginPath();
-                    ctx.moveTo(0, crashY);
-                    ctx.lineTo(w, crashY);
-                    ctx.stroke();
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, "rgba(255,204,0,0.15)");
+    gradient.addColorStop(1, "rgba(255,204,0,0.01)");
 
-                    ctx.setLineDash([]);
+    ctx.fillStyle = gradient;
+    ctx.fill();
 
-                    ctx.fillStyle = "#ff3b3b";
-                    ctx.font = "bold 16px Arial";
-                    ctx.textAlign = "right";
-                    ctx.fillText(state.crashPoint.toFixed(2) + "x", w - 10, crashY - 5);
-                }
+    // =========================
+    // ✈️ PLANE POSITION
+    // =========================
+    let planeX = lastX;
+    let planeY = lastY;
 
-                // === LIVE MULTIPLIER LABEL ===
-                if (state.status === "RUNNING") {
-                    const last = state.graphData[state.graphData.length - 1];
-                    const y = h - ((last.multiplier - 1) * scaleY);
+    // === FIRE TRAIL ===
+    fireTrail.push({ x: planeX, y: planeY });
+    if (fireTrail.length > 25) fireTrail.shift();
 
-                    ctx.fillStyle = "#fff";
-                    ctx.font = "bold 16px Arial";
-                    ctx.textAlign = "right";
-                    ctx.fillText(last.multiplier.toFixed(2) + "x", w - 10, y - 5);
-                }
+    for (let i = 0; i < fireTrail.length; i++) {
+        const p = fireTrail[i];
+        const alpha = i / fireTrail.length;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2 + alpha * 2, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,150,0,${alpha})`;
+        ctx.fill();
+    }
+
+    // =========================
+    // ✈️ DRAW PLANE
+    // =========================
+    if (state.status === "RUNNING") {
+        ctx.save();
+        ctx.translate(planeX, planeY);
+
+        // rotate based on slope
+        const speed = getSpeed();
+        const angle = Math.min(0.8, speed * 10);
+        ctx.rotate(-angle);
+
+        // body
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-14, -5);
+        ctx.lineTo(-10, 0);
+        ctx.lineTo(-14, 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // wing
+        ctx.fillStyle = "#cccccc";
+        ctx.fillRect(-10, -2, 6, 4);
+
+        ctx.restore();
+    }
+
+    // =========================
+    // 💥 EXPLOSION
+    // =========================
+    if (state.status === "CRASHED") {
+        if (!explosion.active) {
+            explosion.active = true;
+            explosion.x = planeX;
+            explosion.y = planeY;
+            explosion.radius = 0;
+        }
+
+        if (explosion.active) {
+            explosion.radius += 3;
+
+            ctx.beginPath();
+            ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255,80,0,0.4)";
+            ctx.fill();
+
+            if (explosion.radius > 40) {
+                explosion.active = false;
             }
+        }
 
-            // Polyfill roundRect if not available
-            if (!CanvasRenderingContext2D.prototype.roundRect) {
-                CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
-                    if (r > w / 2) r = w / 2;
-                    if (r > h / 2) r = h / 2;
-                    this.moveTo(x + r, y);
-                    this.lineTo(x + w - r, y);
-                    this.quadraticCurveTo(x + w, y, x + w, y + r);
-                    this.lineTo(x + w, y + h - r);
-                    this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-                    this.lineTo(x + r, y + h);
-                    this.quadraticCurveTo(x, y + h, x, y + h - r);
-                    this.lineTo(x, y + r);
-                    this.quadraticCurveTo(x, y, x + r, y);
-                    return this;
-                };
-            }
+        // crash line
+        const crashY = h - ((state.crashPoint - 1) * scaleY);
+
+        ctx.setLineDash([6, 6]);
+        ctx.strokeStyle = "#ff3b3b";
+        ctx.beginPath();
+        ctx.moveTo(0, crashY);
+        ctx.lineTo(w, crashY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // =========================
+    // LABEL
+    // =========================
+    if (state.status === "RUNNING") {
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 14px Arial";
+        ctx.textAlign = "right";
+        ctx.fillText(state.multiplier.toFixed(2) + "x", w - 10, planeY - 10);
+    }
+}
 
             // ============================================
             // UI UPDATE
