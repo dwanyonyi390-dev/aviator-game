@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Aviator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #0a0e27;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .auth-container {
+            background: #11163a;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 420px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .auth-container h1 {
+            color: #fff;
+            font-size: 28px;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .auth-container .subtitle {
+            color: #8892b0;
+            text-align: center;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        .auth-container .subtitle a {
+            color: #ffd93d;
+            text-decoration: none;
+        }
+        .auth-container .subtitle a:hover {
+            text-decoration: underline;
+        }
+        .form-group {
+            margin-bottom: 18px;
+        }
+        .form-group label {
+            color: #8892b0;
+            font-size: 13px;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+        .form-group input:focus {
+            border-color: #ffd93d;
+        }
+        .form-group input::placeholder {
+            color: #4a5270;
+        }
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #ffd93d, #f5a623);
+            border: none;
+            border-radius: 10px;
+            color: #0a0e27;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 217, 61, 0.3);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        .error-message {
+            color: #ff4757;
+            font-size: 13px;
+            margin-top: 8px;
+            text-align: center;
+        }
+        .success-message {
+            color: #00d4ff;
+            font-size: 13px;
+            margin-top: 8px;
+            text-align: center;
+        }
+        .plane-icon {
+            text-align: center;
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(10, 14, 39, 0.1);
+            border-top-color: #0a0e27;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .btn-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .password-hint {
+            color: #4a5270;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="plane-icon">✈️</div>
+        <h1>Create Account</h1>
+        <p class="subtitle">Already have an account? <a href="/login">Login</a></p>
+        
+        <form id="registerForm">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="Choose a username" required>
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="email" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="Min 6 characters" required>
+                <div class="password-hint">Password must be at least 6 characters</div>
+            </div>
+            <div id="message" class="error-message"></div>
+            <button type="submit" class="btn-primary" id="registerBtn">
+                <span class="btn-content">
+                    <span>Create Account</span>
+                    <span class="loading-spinner" id="spinner"></span>
+                </span>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const messageEl = document.getElementById('message');
+            const btn = document.getElementById('registerBtn');
+            const spinner = document.getElementById('spinner');
+            
+            // Reset
+            messageEl.textContent = '';
+            messageEl.className = 'error-message';
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    messageEl.className = 'success-message';
+                    messageEl.textContent = '✅ Account created! Redirecting...';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/game';
+                    }, 1000);
+                } else {
+                    messageEl.className = 'error-message';
+                    messageEl.textContent = '❌ ' + (data.error || 'Registration failed');
+                    btn.disabled = false;
+                    spinner.style.display = 'none';
+                }
+            } catch (error) {
+                messageEl.className = 'error-message';
+                messageEl.textContent = '❌ Network error. Please try again.';
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
