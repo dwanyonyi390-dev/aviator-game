@@ -630,7 +630,7 @@
     </style>
 
     <!-- ============================================
-    SOCKET.IO
+    SOCKET.IO - MUST BE FIRST
     ============================================ -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
@@ -642,7 +642,7 @@
             'use strict';
 
             // ============================================
-            // CONFIGURATION - AUTO DETECT SERVER URL
+            // CONFIGURATION
             // ============================================
             const CONFIG = {
                 serverUrl: window.location.origin,
@@ -650,60 +650,7 @@
                 canvasHeight: 400,
                 canvasWidth: 800,
                 historyLimit: 20,
-                MAX_POINTS: 120,
-                CAMERA_X: 0.6,
-                CAMERA_Y: 0.7,
-                FIXED_SCALE: 8,
-                GRID_SPACING: 50,
-                VERTICAL_FOLLOW_SPEED: 0.06,
-                HORIZONTAL_FOLLOW_SPEED: 0.08,
-                ANCHOR_POINTS: 30
-            };
-
-            // ============================================
-            // GLOBAL VARIABLES (CLASSIC AVIATOR ENGINE)
-            // ============================================
-
-            // 🎥 Camera (smooth follow)
-            var cameraX = 0;
-            var cameraY = 0;
-            var cameraTargetX = 0;
-            var cameraTargetY = 0;
-            var cameraSmooth = 0.08;
-
-            // ✈️ Plane physics (classic feel)
-            var plane = {
-                x: 0,
-                y: 0,
-                angle: 0,
-                velocity: 0,
-                acceleration: 0.0025,
-                maxVelocity: 2.5
-            };
-
-            // 🚀 Takeoff animation
-            var takeoffProgress = 0;
-            var takeoffSpeed = 0.02;
-
-            // 🔥 Fire trail (clean + classic)
-            var fireTrail = [];
-            var trailMax = 40;
-            var trailFade = 0.92;
-            var trailThickness = 3;
-
-            // 🎨 Curve smoothness
-            var smoothThickness = 2.5;
-
-            // 💥 Explosion system (improved but simple)
-            var explosion = {
-                active: false,
-                x: 0,
-                y: 0,
-                radius: 0,
-                maxRadius: 80,
-                growth: 4,
-                particles: [],
-                particleCount: 30
+                MAX_POINTS: 120
             };
 
             // ============================================
@@ -744,21 +691,26 @@
                 cashoutPending: false,
                 socket: null,
                 roundStarted: false,
-                playerBets: [],
-                countdownInterval: null,
                 running: false,
-                betAmount: 10
+                betAmount: 10,
+                playerBets: []
             };
 
             // ============================================
-            // GET SPEED HELPER
+            // CANVAS VARIABLES
             // ============================================
-            function getSpeed() {
-                if (state.graphData.length < 2) return 0;
-                var last = state.graphData[state.graphData.length - 1].multiplier;
-                var prev = state.graphData[state.graphData.length - 2].multiplier;
-                return last - prev;
-            }
+            var canvasCtx = null;
+            var canvasWidth = 0;
+            var canvasHeight = 0;
+            var fireTrail = [];
+            var explosion = {
+                active: false,
+                x: 0,
+                y: 0,
+                radius: 0
+            };
+            var planeX = 0;
+            var planeY = 0;
 
             // ============================================
             // CREATE GAME HTML
@@ -776,7 +728,7 @@
                 html += '<div class="crash-game-widget">';
                 html += '    <div class="crash-game-header">';
                 html += '        <div class="crash-game-title">';
-                html += '            <span class="plane-icon">✈️</span> FIRE BIRD';
+                html += '            <span class="plane-icon">✈️</span> AVIATOR';
                 html += '        </div>';
                 html += '        <div class="crash-game-round-info" id="roundInfo">Round #0</div>';
                 html += '    </div>';
@@ -914,7 +866,7 @@
             }
 
             // ============================================
-            // HANDLE PLACE BET - FIXED
+            // HANDLE PLACE BET
             // ============================================
             function handlePlaceBet() {
                 console.log('🎯 Place Bet clicked');
@@ -1008,7 +960,7 @@
                 state.hasCashedOut = true;
                 state.cashoutPending = true;
 
-                // Update UI
+                // Update UI immediately
                 if (DOM.balance) {
                     DOM.balance.textContent = '$' + state.balance.toFixed(2);
                 }
@@ -1020,12 +972,9 @@
 
                 showToast('💰 Cashed out at ' + state.multiplier.toFixed(2) + 'x - Won $' + winnings.toFixed(2), 'success');
 
-                // Send to server
+                // Send to server - FIXED: don't send data, just emit the event
                 if (state.socket && state.socket.connected) {
-                    state.socket.emit('bet:cashout', { 
-                        multiplier: state.multiplier,
-                        payout: winnings 
-                    });
+                    state.socket.emit('bet:cashout');
                     console.log("📤 Emitted bet:cashout event");
                 } else {
                     console.warn("⚠️ Socket not connected, cashout only local");
@@ -1054,10 +1003,7 @@
 
                 state.graphData = [{ multiplier: 1.00 }];
                 fireTrail = [];
-                smoothThickness = 2;
                 explosion.active = false;
-                cameraX = 0;
-                cameraY = 0;
 
                 if (DOM.cashout) {
                     DOM.cashout.disabled = false;
@@ -1090,8 +1036,8 @@
 
                 // Activate explosion
                 explosion.active = true;
-                explosion.x = plane.x || 600;
-                explosion.y = plane.y || 200;
+                explosion.x = planeX || 600;
+                explosion.y = planeY || 200;
                 explosion.radius = 0;
 
                 if (!state.hasCashedOut && state.hasBet) {
@@ -1120,17 +1066,12 @@
                     fireTrail = [];
                     explosion.active = false;
                     state.status = 'WAITING';
-                    startCountdown();
                 }, 500);
             }
 
             // ============================================
             // CANVAS SETUP
             // ============================================
-            var canvasCtx = null;
-            var canvasWidth = 0;
-            var canvasHeight = 0;
-
             function initCanvas() {
                 if (!DOM.canvas) return;
                 var rect = DOM.canvas.parentElement.getBoundingClientRect();
@@ -1184,7 +1125,7 @@
             }
 
             // ============================================
-            // DRAW GRAPH - UPDATED WITH PLANE
+            // DRAW GRAPH
             // ============================================
             function drawGraph() {
                 if (!canvasCtx) return;
@@ -1200,7 +1141,7 @@
                 ctx.fillStyle = "#0b1026";
                 ctx.fillRect(0, 0, w, h);
 
-                // === GRID ===
+                // Grid
                 ctx.strokeStyle = "rgba(255,255,255,0.04)";
                 ctx.lineWidth = 1;
 
@@ -1237,10 +1178,10 @@
                 
                 // Get last point for plane position
                 const lastIndex = state.graphData.length - 1;
-                const lastX = (lastIndex / (state.graphData.length + 5)) * w;
-                const lastY = h - ((state.graphData[lastIndex].multiplier - 1) * scaleY);
+                planeX = (lastIndex / (state.graphData.length + 5)) * w;
+                planeY = h - ((state.graphData[lastIndex].multiplier - 1) * scaleY);
 
-                // === DRAW CURVE with smooth quadratic ===
+                // Draw curve with smooth quadratic
                 ctx.beginPath();
 
                 for (let i = 0; i < state.graphData.length - 1; i++) {
@@ -1269,7 +1210,7 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0;
 
-                // === FILL ===
+                // Fill
                 ctx.lineTo(w, h);
                 ctx.lineTo(0, h);
                 ctx.closePath();
@@ -1281,13 +1222,9 @@
                 ctx.fillStyle = gradient;
                 ctx.fill();
 
-                // Update plane position for fire trail
-                plane.x = lastX;
-                plane.y = lastY;
-
-                // === FIRE TRAIL ===
+                // Fire trail
                 if (state.status === "RUNNING") {
-                    fireTrail.push({ x: lastX, y: lastY });
+                    fireTrail.push({ x: planeX, y: planeY });
                     if (fireTrail.length > 25) fireTrail.shift();
 
                     for (let i = 0; i < fireTrail.length; i++) {
@@ -1302,10 +1239,10 @@
                     }
                 }
 
-                // === DRAW PLANE ===
+                // Draw plane
                 if (state.status === "RUNNING") {
                     ctx.save();
-                    ctx.translate(lastX, lastY);
+                    ctx.translate(planeX, planeY);
 
                     // Rotate based on speed
                     const speed = getSpeed();
@@ -1338,7 +1275,7 @@
                     ctx.restore();
                 }
 
-                // === EXPLOSION ===
+                // Explosion
                 if (state.status === "CRASHED") {
                     if (explosion.active) {
                         explosion.radius += 4;
@@ -1385,16 +1322,26 @@
                     ctx.fillText(state.crashPoint.toFixed(2) + "x", w - 10, crashY - 8);
                 }
 
-                // === LIVE LABEL ===
+                // Live label
                 if (state.status === "RUNNING") {
                     ctx.fillStyle = "#ffffff";
                     ctx.font = "bold 14px Arial";
                     ctx.textAlign = "right";
                     ctx.shadowColor = "rgba(0,0,0,0.5)";
                     ctx.shadowBlur = 8;
-                    ctx.fillText(state.multiplier.toFixed(2) + "x", w - 12, lastY - 15);
+                    ctx.fillText(state.multiplier.toFixed(2) + "x", w - 12, planeY - 15);
                     ctx.shadowBlur = 0;
                 }
+            }
+
+            // ============================================
+            // GET SPEED HELPER
+            // ============================================
+            function getSpeed() {
+                if (state.graphData.length < 2) return 0;
+                var last = state.graphData[state.graphData.length - 1].multiplier;
+                var prev = state.graphData[state.graphData.length - 2].multiplier;
+                return last - prev;
             }
 
             // ============================================
@@ -1449,18 +1396,6 @@
                 if (DOM.betAmount) DOM.betAmount.disabled = state.status !== 'WAITING' || state.hasBet;
 
                 drawGraph();
-            }
-
-            // ============================================
-            // BUILD INITIAL GROUND POINTS
-            // ============================================
-            function buildGroundPoints() {
-                state.graphData = [];
-                for (var i = 0; i < 20; i++) {
-                    state.graphData.push({
-                        multiplier: 1.00 + (0.01 * i)
-                    });
-                }
             }
 
             // ============================================
@@ -1519,8 +1454,6 @@
                         state.isConnected = true;
                         showToast('Connected to game server!', 'success');
                         state.socket.emit('game:history');
-                        buildGroundPoints();
-                        startCountdown();
                         updateUI();
                     });
 
@@ -1538,7 +1471,7 @@
 
                     state.socket.on('game:state', function(data) {
                         console.log('📊 Game state:', data);
-                        state.roundId = data.roundId;
+                        state.roundId = data.roundId || 0;
                         state.status = data.status || 'WAITING';
                         state.multiplier = data.multiplier || 1.00;
                         state.crashPoint = data.crashPoint || 0;
@@ -1550,9 +1483,9 @@
 
                     state.socket.on('game:countdown', function(data) {
                         console.log('⏰ Countdown:', data.countdown);
-                        state.roundId = data.roundId;
+                        state.roundId = data.roundId || 0;
                         state.status = 'WAITING';
-                        state.countdown = data.countdown;
+                        state.countdown = data.countdown || 5;
                         state.isCrashed = false;
                         state.hasBet = false;
                         state.hasCashedOut = false;
@@ -1571,16 +1504,14 @@
                         console.log('🚀 Round started!');
                         state.status = 'RUNNING';
                         state.running = true;
-                        state.roundId = data.roundId;
+                        state.roundId = data.roundId || 0;
                         state.multiplier = 1.00;
                         state.isCrashed = false;
                         state.cashoutPending = false;
                         state.roundStarted = true;
-                        takeoffProgress = 0;
                         fireTrail = [];
                         explosion.active = false;
                         state.graphData = [{ multiplier: 1.00 }];
-                        smoothThickness = 2;
                         if (DOM.cashout) {
                             DOM.cashout.disabled = false;
                             DOM.cashout.textContent = 'CASH OUT';
@@ -1592,36 +1523,10 @@
 
                     state.socket.on('game:update', function(data) {
                         if (state.status === 'RUNNING') {
-                            state.multiplier = data.multiplier;
+                            state.multiplier = data.multiplier || 1;
                             state.graphData.push({ multiplier: state.multiplier });
                             if (state.graphData.length > 120) {
                                 state.graphData.shift();
-                            }
-
-                            if (state.multiplier >= state.crashPoint && state.crashPoint > 0) {
-                                state.multiplier = state.crashPoint;
-                                state.status = 'CRASHED';
-                                state.isCrashed = true;
-                                state.running = false;
-                                state.roundStarted = false;
-                                if (DOM.cashout) {
-                                    DOM.cashout.disabled = true;
-                                    DOM.cashout.textContent = 'CASHED OUT';
-                                    DOM.cashout.classList.remove('cashing');
-                                }
-                                updateUI();
-                                addHistoryItem(state.crashPoint);
-                                if (!state.hasCashedOut && state.hasBet) {
-                                    showToast('💥 Crashed at ' + state.crashPoint.toFixed(2) + 'x', 'info');
-                                }
-                                setTimeout(function() {
-                                    state.graphData = [];
-                                    fireTrail = [];
-                                    explosion.active = false;
-                                    state.status = 'WAITING';
-                                    startCountdown();
-                                }, 500);
-                                return;
                             }
                             updateUI();
                         }
@@ -1630,44 +1535,56 @@
                     state.socket.on('game:crash', function(data) {
                         console.log('💥 Crashed at:', data.multiplier);
                         state.status = 'CRASHED';
-                        state.crashPoint = data.multiplier;
+                        state.crashPoint = data.multiplier || 1;
                         state.isCrashed = true;
-                        state.roundId = data.roundId;
+                        state.roundId = data.roundId || 0;
                         state.cashoutPending = false;
                         state.roundStarted = false;
                         state.running = false;
-                        state.graphData.push({ multiplier: data.multiplier });
+                        state.graphData.push({ multiplier: state.crashPoint });
                         if (DOM.cashout) {
                             DOM.cashout.disabled = true;
                             DOM.cashout.textContent = 'CASHED OUT';
                             DOM.cashout.classList.remove('cashing');
                         }
+                        // Trigger explosion
+                        explosion.active = true;
+                        explosion.x = planeX || 600;
+                        explosion.y = planeY || 200;
+                        explosion.radius = 0;
                         updateUI();
-                        addHistoryItem(data.multiplier);
+                        addHistoryItem(state.crashPoint);
                         if (!state.hasCashedOut && state.hasBet) {
-                            showToast('💥 Crashed at ' + data.multiplier.toFixed(2) + 'x', 'info');
+                            showToast('💥 Crashed at ' + state.crashPoint.toFixed(2) + 'x', 'info');
                         }
                         setTimeout(function() {
                             state.graphData = [];
                             fireTrail = [];
                             explosion.active = false;
                             state.status = 'WAITING';
-                            startCountdown();
+                            updateUI();
                         }, 500);
                     });
 
                     state.socket.on('bet:confirmed', function(data) {
                         console.log('💰 Bet confirmed:', data);
                         state.hasBet = true;
-                        state.balance = data.balance;
+                        state.balance = data.balance || state.balance;
+                        if (DOM.placeBet) {
+                            DOM.placeBet.disabled = true;
+                            DOM.placeBet.textContent = 'BET PLACED';
+                        }
+                        if (DOM.betAmount) {
+                            DOM.betAmount.disabled = true;
+                        }
                         updateUI();
-                        showToast('✅ Bet placed: $' + data.amount.toFixed(2), 'success');
+                        showToast('✅ Bet placed: $' + (data.amount || 0).toFixed(2), 'success');
                     });
 
                     state.socket.on('bet:cashout:confirmed', function(data) {
                         console.log('💰 Cashed out confirmed:', data);
                         state.hasCashedOut = true;
-                        state.balance = data.balance;
+                        state.balance = data.balance || state.balance;
                         state.cashoutPending = false;
                         if (DOM.cashout) {
                             DOM.cashout.textContent = '✅ CASHED';
@@ -1675,8 +1592,14 @@
                             DOM.cashout.classList.remove('cashing');
                         }
                         updateUI();
-                        showToast('💰 Cashed out at ' + data.multiplier.toFixed(2) + 'x - Won $' + data.payout
-                            .toFixed(2), 'success');
+                        showToast('💰 Cashed out at ' + (data.multiplier || 0).toFixed(2) + 'x - Won $' + (data.payout || 0).toFixed(2), 'success');
+                    });
+
+                    state.socket.on('bet:lost', function(data) {
+                        console.log('💔 Bet lost:', data);
+                        state.hasBet = false;
+                        state.balance = data.balance || state.balance;
+                        updateUI();
                     });
 
                     state.socket.on('bet:error', function(data) {
@@ -1741,30 +1664,6 @@
             }
 
             // ============================================
-            // FORCE GAME START (for testing)
-            // ============================================
-            function forceGameStart() {
-                console.log('🔧 Manual override: Forcing game to start...');
-                state.status = 'RUNNING';
-                state.running = true;
-                state.multiplier = 1.00;
-                state.crashPoint = generateCrashPoint();
-                takeoffProgress = 0;
-                fireTrail = [];
-                explosion.active = false;
-                state.graphData = [{ multiplier: 1.00 }];
-                smoothThickness = 2;
-                state.roundStarted = true;
-                if (DOM.cashout) {
-                    DOM.cashout.disabled = false;
-                    DOM.cashout.textContent = 'CASH OUT';
-                    DOM.cashout.classList.add('cashing');
-                }
-                updateUI();
-                showToast('🔄 Game manually started!', 'info');
-            }
-
-            // ============================================
             // HANDLE RESIZE
             // ============================================
             function handleResize() {
@@ -1776,8 +1675,8 @@
             // ============================================
             function update() {
                 if (explosion.active) {
-                    explosion.radius += 2;
-                    if (explosion.radius > 40) {
+                    explosion.radius += 3;
+                    if (explosion.radius > 60) {
                         explosion.active = false;
                     }
                 }
@@ -1801,7 +1700,6 @@
                     return;
                 }
 
-                buildGroundPoints();
                 var created = createGameHTML();
 
                 if (!created) {
@@ -1811,7 +1709,6 @@
 
                 window.crashGame = {
                     setBetAmount: setBetAmount,
-                    forceGameStart: forceGameStart,
                     state: state,
                     init: init
                 };
@@ -1829,7 +1726,6 @@
                 setInterval(update, 50);
 
                 console.log('✅ Aviator Game initialized');
-                console.log('💡 To manually start, type: window.crashGame.forceGameStart()');
                 console.log('💡 Server URL:', CONFIG.serverUrl);
 
                 fetch(CONFIG.serverUrl + '/health')
