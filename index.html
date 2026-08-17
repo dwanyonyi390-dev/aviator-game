@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aviator · classic crash</title>
+  <title>Aviator · pro crash</title>
   <style>
     * {
       margin: 0;
@@ -13,26 +13,25 @@
     }
 
     body {
-      background: #0a0e1a;
+      background: radial-gradient(circle at top, #0f172a, #020617);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      transition: background 0.25s;
     }
 
     .crash-container {
       width: 100%;
       max-width: 960px;
-      background: #0f1322;
+      background: #0b1120;
       border-radius: 32px;
       padding: 24px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.8);
-      transition: all 0.2s;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.9);
     }
 
-    /* header */
     .game-header {
       display: flex;
       justify-content: space-between;
@@ -70,10 +69,8 @@
       font-size: 14px;
       color: #8892b0;
       border: 1px solid rgba(255, 255, 255, 0.04);
-      backdrop-filter: blur(2px);
     }
 
-    /* multiplier display */
     .multiplier-area {
       text-align: center;
       padding: 6px 0 12px;
@@ -84,7 +81,7 @@
       font-weight: 700;
       letter-spacing: -1.5px;
       display: inline-block;
-      transition: color 0.25s;
+      transition: color 0.25s, transform 0.2s;
     }
 
     .multiplier-value .x {
@@ -97,19 +94,27 @@
     .multiplier-value.waiting {
       color: #69708f;
     }
+
     .multiplier-value.running {
       color: #f6c445;
-      text-shadow: 0 0 30px rgba(246, 196, 69, 0.2);
-    }
-    .multiplier-value.crashed {
-      color: #ff4d6d;
-      text-shadow: 0 0 30px rgba(255, 77, 109, 0.25);
+      text-shadow: 0 0 30px rgba(246, 196, 69, 0.4);
+      animation: pulseMul 0.6s ease-in-out infinite alternate;
     }
 
-    /* canvas wrapper */
+    .multiplier-value.crashed {
+      color: #ff4d6d;
+      text-shadow: 0 0 30px rgba(255, 77, 109, 0.3);
+      animation: none;
+    }
+
+    @keyframes pulseMul {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.08); }
+    }
+
     .canvas-wrapper {
       position: relative;
-      background: #0b0f1f;
+      background: #080d1a;
       border-radius: 20px;
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.04);
@@ -120,7 +125,19 @@
       display: block;
       width: 100%;
       height: auto;
-      background: #0b0f1f;
+      background: #080d1a;
+    }
+
+    #plane {
+      position: absolute;
+      width: 40px;
+      pointer-events: none;
+      transition: transform 0.08s linear;
+      filter: drop-shadow(0 4px 12px rgba(246, 196, 69, 0.3));
+      top: 0;
+      left: 0;
+      will-change: transform;
+      z-index: 10;
     }
 
     .game-status {
@@ -135,12 +152,14 @@
       font-weight: 500;
       border: 1px solid rgba(255, 255, 255, 0.06);
       color: #8892b0;
+      z-index: 5;
     }
 
     .game-status.running {
-      color: #6bc9ff;
-      border-color: rgba(107, 201, 255, 0.25);
+      color: #facc15;
+      border-color: rgba(250, 204, 21, 0.25);
     }
+
     .game-status.crashed {
       color: #ff4d6d;
       border-color: rgba(255, 77, 109, 0.25);
@@ -162,6 +181,7 @@
       color: rgba(255, 255, 255, 0.04);
       pointer-events: none;
       transition: 0.2s;
+      z-index: 3;
     }
 
     .countdown-overlay.active {
@@ -298,27 +318,27 @@
     }
 
     .btn-place {
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
       color: white;
       flex: 2;
-      box-shadow: 0 6px 18px rgba(59, 130, 246, 0.2);
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.2);
     }
 
     .btn-place:hover:not(:disabled) {
       transform: translateY(-2px);
-      box-shadow: 0 10px 24px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.35);
     }
 
     .btn-cashout {
-      background: linear-gradient(135deg, #f6c445, #eab308);
+      background: linear-gradient(135deg, #facc15, #eab308);
       color: #0a0e1a;
       flex: 1.5;
-      box-shadow: 0 6px 18px rgba(246, 196, 69, 0.2);
+      box-shadow: 0 6px 18px rgba(250, 204, 21, 0.2);
     }
 
     .btn-cashout:hover:not(:disabled) {
       transform: translateY(-2px);
-      box-shadow: 0 10px 24px rgba(246, 196, 69, 0.35);
+      box-shadow: 0 10px 24px rgba(250, 204, 21, 0.4);
     }
 
     .btn-cashout.cashing {
@@ -326,11 +346,26 @@
     }
 
     @keyframes cashGlow {
-      0% { box-shadow: 0 0 8px rgba(246, 196, 69, 0.2); }
-      100% { box-shadow: 0 0 28px rgba(246, 196, 69, 0.5); }
+      0% { box-shadow: 0 0 8px rgba(250, 204, 21, 0.2); }
+      100% { box-shadow: 0 0 28px rgba(250, 204, 21, 0.5); }
     }
 
-    /* right panel - players */
+    .auto-bet-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #8892b0;
+      font-size: 13px;
+    }
+
+    .auto-bet-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #f6c445;
+      cursor: pointer;
+    }
+
+    /* right panel */
     .right-col {
       background: rgba(255, 255, 255, 0.015);
       border-radius: 18px;
@@ -391,7 +426,7 @@
       color: #8892b0;
     }
 
-    /* live bets */
+    /* live feed */
     .live-feed {
       background: rgba(255, 255, 255, 0.015);
       border-radius: 18px;
@@ -481,8 +516,8 @@
     }
 
     .history-grid .h-item.high {
-      color: #6bc9ff;
-      border-color: rgba(107, 201, 255, 0.15);
+      color: #facc15;
+      border-color: rgba(250, 204, 21, 0.15);
     }
 
     .history-grid .h-item.low {
@@ -550,8 +585,12 @@
 <body>
 
 <div class="crash-container" id="app">
-  <!-- dynamic content -->
+  <!-- dynamic -->
 </div>
+
+<!-- audio -->
+<audio id="tickSound" src="https://assets.mixkit.co/sfx/preview/mixkit-game-click-1114.mp3" preload="auto"></audio>
+<audio id="crashSound" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-retro-changing-tab-206.mp3" preload="auto"></audio>
 
 <script>
   (function() {
@@ -569,7 +608,7 @@
 
     // ---------- STATE ----------
     const state = {
-      status: 'WAITING',       // WAITING | RUNNING | CRASHED
+      status: 'WAITING',
       multiplier: 1.00,
       roundId: 0,
       countdown: 8,
@@ -617,6 +656,18 @@
       }, 2800);
     }
 
+    // fake players
+    const fakeNames = ["Jay254", "CryptoKenya", "Moraa", "OtisX", "BetKing", "NairobiPro", "Shiro", "Kiprop", "Wanjiru", "Omondi"];
+
+    function generateFakePlayers() {
+      const count = Math.floor(Math.random() * 5) + 3;
+      return Array.from({ length: count }, () => ({
+        name: fakeNames[Math.floor(Math.random() * fakeNames.length)],
+        betAmount: Math.floor(Math.random() * 80) + 10,
+        cashedOut: state.status === 'RUNNING' ? Math.random() > 0.6 : false
+      }));
+    }
+
     // ---------- render UI ----------
     function render() {
       const app = document.getElementById('app');
@@ -638,6 +689,7 @@
 
         <div class="canvas-wrapper">
           <canvas id="gameCanvas" width="${CONFIG.canvasWidth}" height="${CONFIG.canvasHeight}"></canvas>
+          <img id="plane" src="https://cdn-icons-png.flaticon.com/512/744/744465.png" alt="plane" style="display:block;position:absolute;width:40px;pointer-events:none;transition:transform 0.08s linear;filter:drop-shadow(0 4px 12px rgba(246,196,69,0.3));top:0;left:0;will-change:transform;z-index:10;">
           <div class="game-status waiting" id="statusBadge">⏳ Waiting</div>
           <div class="countdown-overlay" id="countdownOverlay">${state.countdown}</div>
         </div>
@@ -661,6 +713,10 @@
               <div class="action-btns">
                 <button class="btn-place" id="placeBtn">Place Bet</button>
                 <button class="btn-cashout" id="cashoutBtn" disabled>CASH OUT</button>
+              </div>
+              <div class="auto-bet-row">
+                <input type="checkbox" id="autoBet">
+                <label for="autoBet">Auto Bet</label>
               </div>
             </div>
           </div>
@@ -696,6 +752,7 @@
       $.playerList = document.getElementById('playerList');
       $.liveFeed = document.getElementById('liveFeed');
       $.historyGrid = document.getElementById('historyGrid');
+      $.plane = document.getElementById('plane');
 
       // events
       $.placeBtn.onclick = handlePlaceBet;
@@ -727,10 +784,10 @@
       const ctx = $.canvas.getContext('2d');
       const w = CONFIG.canvasWidth, h = CONFIG.canvasHeight;
 
-      // draw function
+      // draw function with smooth curve
       function drawGraph() {
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = '#0b0f1f';
+        ctx.fillStyle = '#080d1a';
         ctx.fillRect(0, 0, w, h);
 
         // grid
@@ -750,31 +807,42 @@
         }
 
         if (state.status === 'WAITING') {
-          ctx.fillStyle = 'rgba(255,255,255,0.1)';
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
           ctx.font = '20px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(`next round in ${state.countdown}s`, w/2, h/2 + 8);
+          // hide plane
+          if ($.plane) $.plane.style.display = 'none';
           return;
         }
 
-        if (state.graphData.length < 2) return;
+        if (state.graphData.length < 2) {
+          if ($.plane) $.plane.style.display = 'none';
+          return;
+        }
 
         let maxVal = Math.max(...state.graphData.map(p => p.multiplier), state.crashPoint || 1);
         if (maxVal < 2) maxVal = 2;
         const scaleY = h / (maxVal - 1);
 
-        // curve
+        // smooth curve
         ctx.beginPath();
         for (let i = 0; i < state.graphData.length; i++) {
           const x = (i / (state.graphData.length + 4)) * w;
           const y = h - ((state.graphData[i].multiplier - 1) * scaleY);
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            const prev = state.graphData[i - 1];
+            const prevX = ((i - 1) / (state.graphData.length + 4)) * w;
+            const prevY = h - ((prev.multiplier - 1) * scaleY);
+            ctx.quadraticCurveTo(prevX, prevY, x, y);
+          }
         }
         ctx.strokeStyle = '#f6c445';
-        ctx.lineWidth = 2.4;
-        ctx.shadowColor = 'rgba(246,196,69,0.2)';
-        ctx.shadowBlur = 10;
+        ctx.lineWidth = 2.8;
+        ctx.shadowColor = 'rgba(246,196,69,0.25)';
+        ctx.shadowBlur = 14;
         ctx.stroke();
         ctx.shadowBlur = 0;
 
@@ -783,7 +851,7 @@
         ctx.lineTo(0, h);
         ctx.closePath();
         const grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, 'rgba(246,196,69,0.08)');
+        grad.addColorStop(0, 'rgba(246,196,69,0.07)');
         grad.addColorStop(1, 'rgba(246,196,69,0.01)');
         ctx.fillStyle = grad;
         ctx.fill();
@@ -813,6 +881,25 @@
           ctx.font = 'bold 16px Inter, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(last.multiplier.toFixed(2) + 'x', w-12, ly-6);
+        }
+
+        // update plane position
+        if ($.plane && state.status === 'RUNNING' && state.graphData.length > 1) {
+          $.plane.style.display = 'block';
+          const lastIdx = state.graphData.length - 1;
+          const x = (lastIdx / (state.graphData.length + 4)) * w;
+          const y = h - ((state.multiplier - 1) * scaleY);
+          const rot = Math.min(state.multiplier * 8, 45);
+          $.plane.style.transform = `translate(${x - 20}px, ${y - 20}px) rotate(${rot}deg)`;
+        } else if ($.plane && state.status === 'CRASHED') {
+          $.plane.style.display = 'block';
+          // freeze at crash position
+          const lastIdx = state.graphData.length - 1;
+          const x = (lastIdx / (state.graphData.length + 4)) * w;
+          const y = h - ((state.crashPoint - 1) * scaleY);
+          $.plane.style.transform = `translate(${x - 20}px, ${y - 20}px) rotate(45deg)`;
+        } else if ($.plane) {
+          $.plane.style.display = 'none';
         }
       }
 
@@ -868,15 +955,22 @@
           $.countdown.className = 'countdown-overlay';
         }
 
+        // audio: tick during running
+        if (state.status === 'RUNNING') {
+          document.getElementById('tickSound')?.play().catch(() => {});
+        }
+        if (state.status === 'CRASHED') {
+          document.getElementById('crashSound')?.play().catch(() => {});
+        }
+
         drawGraph();
       }
 
-      // update players
+      // update players (fake multiplayer)
       function updatePlayers(players) {
         if (!players || !players.length) {
-          $.playerList.innerHTML = `<div style="color:#4a5270;text-align:center;padding:20px 0;font-size:13px;">waiting for players</div>`;
-          $.liveFeed.innerHTML = `<div class="empty-feed">no active bets</div>`;
-          return;
+          const fake = generateFakePlayers();
+          players = fake;
         }
         let html = '';
         let feedHtml = '';
@@ -888,7 +982,6 @@
             <span class="pbet">$${p.betAmount.toFixed(2)}</span>
             <span class="pstatus ${statusClass}">${label}</span>
           </div>`;
-
           const dotClass = p.cashedOut ? 'cashed' : (state.isCrashed ? 'lost' : '');
           feedHtml += `<span class="bet-chip">
             <span class="status-dot ${dotClass}"></span>
@@ -941,6 +1034,9 @@
         state.hasCashedOut = true;
         state.socket?.emit('bet:cashout');
         showToast(`💰 Cashed at ${state.multiplier.toFixed(2)}x · +$${win.toFixed(2)}`, 'success');
+        // flash effect
+        document.body.style.background = 'radial-gradient(circle, #1f2937, #020617)';
+        setTimeout(() => { document.body.style.background = ''; }, 300);
         updateUI();
       }
 
@@ -1052,7 +1148,7 @@
           updateUI();
         });
         state.socket.on('player:list', data => {
-          if (data) updatePlayers(data);
+          if (data && data.length) updatePlayers(data);
         });
         state.socket.on('game:history:data', data => {
           if (data?.history?.length) {
@@ -1066,7 +1162,21 @@
       function init() {
         render();
         setupSocket();
-        // start countdown loop if no server
+
+        // offline simulation with fake players and auto-bet
+        setInterval(() => {
+          // fake players every 2s
+          if (!state.connected) {
+            updatePlayers(generateFakePlayers());
+          }
+          // auto bet
+          const auto = document.getElementById('autoBet');
+          if (auto?.checked && state.status === 'WAITING' && !state.hasBet && state.balance > 0) {
+            handlePlaceBet();
+          }
+        }, 2000);
+
+        // countdown loop (offline fallback)
         setInterval(() => {
           if (!state.connected) {
             if (state.status === 'WAITING' && state.countdown > 0) {
@@ -1112,7 +1222,7 @@
             }
           }
         }, 1000);
-        // periodic UI refresh
+
         setInterval(updateUI, 120);
         window.crash = { state, forceStart: () => { state.crashPoint = generateCrashPoint(); state.status = 'RUNNING'; state.running = true; state.graphData = [{ multiplier: 1.00 }]; updateUI(); } };
       }
@@ -1121,7 +1231,6 @@
       else init();
     })();
   </script>
-  <!-- socket.io -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </body>
 </html>
