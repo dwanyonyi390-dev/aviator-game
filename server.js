@@ -12,7 +12,7 @@ const server = http.createServer(app);
 
 // Middleware
 app.use(cors({ 
-    origin: 'http://localhost:3000', // <--- YOUR SERVER URL
+    origin: '*',    // <--- CHANGE THIS
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
