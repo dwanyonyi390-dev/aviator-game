@@ -10,26 +10,41 @@ const cookieParser = require('cookie-parser');
 
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
-    cors: { origin: "*" }
+    cors: {
+        origin: process.env.CLIENT_URL,
+        credentials: true
+    }
 });
+
+// =======================
+// CONFIG
+// =======================
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // =======================
 // MIDDLEWARE
 // =======================
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: process.env.CLIENT_URL,
+    credentials: true
+}));
 app.use(cookieParser());
 app.use(express.static('public'));
 
 // =======================
-// FAKE DATABASE (IN-MEMORY)
+// FAKE DATABASE (TEMP)
 // =======================
 const users = [];
 
 // =======================
-// REGISTER
+// AUTH ROUTES
 // =======================
+
+// REGISTER
 app.post('/api/register', async (req, res) => {
     const { username, email, password } = req.body;
 
@@ -50,19 +65,17 @@ app.post('/api/register', async (req, res) => {
 
     users.push(user);
 
-    const token = jwt.sign({ id: user.id }, "secretkey");
+    const token = jwt.sign({ id: user.id }, JWT_SECRET);
 
     res.cookie('token', token, {
-        httpOnly: false, // IMPORTANT FIX
+        httpOnly: false,
         maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
     res.json({ success: true });
 });
 
-// =======================
 // LOGIN
-// =======================
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
 
@@ -72,10 +85,10 @@ app.post('/api/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(400).json({ error: "Wrong password" });
 
-    const token = jwt.sign({ id: user.id }, "secretkey");
+    const token = jwt.sign({ id: user.id }, JWT_SECRET);
 
     res.cookie('token', token, {
-        httpOnly: false, // IMPORTANT FIX
+        httpOnly: false,
         maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
@@ -86,14 +99,12 @@ app.post('/api/login', async (req, res) => {
 // SOCKET AUTH
 // =======================
 io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
+    const token = socket.handshake.auth?.token;
 
-    if (!token) {
-        return next(new Error("No token"));
-    }
+    if (!token) return next(new Error("Authentication required"));
 
     try {
-        const decoded = jwt.verify(token, "secretkey");
+        const decoded = jwt.verify(token, JWT_SECRET);
         const user = users.find(u => u.id === decoded.id);
 
         if (!user) return next(new Error("User not found"));
@@ -111,10 +122,19 @@ io.use((socket, next) => {
 let multiplier = 1;
 let crashPoint = 2;
 let running = false;
+let gameInterval = null;
 
 // =======================
-// GAME LOOP
+// GAME LOGIC
 // =======================
+function generateCrashPoint() {
+    const r = Math.random();
+
+    if (r < 0.5) return 1 + Math.random();       // low
+    if (r < 0.8) return 2 + Math.random() * 2;   // mid
+    return 4 + Math.random() * 2;                // high
+}
+
 function startGame() {
     multiplier = 1;
     crashPoint = generateCrashPoint();
@@ -122,37 +142,43 @@ function startGame() {
 
     io.emit('game:start');
 
-    const interval = setInterval(() => {
-        multiplier += 0.01;
+    gameInterval = setInterval(() => {
+        multiplier += parseFloat(process.env.GAME_GROWTH_RATE || 0.01);
 
         io.emit('game:update', { multiplier });
 
         if (multiplier >= crashPoint) {
-            running = false;
-            io.emit('game:crash', { multiplier });
-
-            clearInterval(interval);
-
-            // reset bets
-            io.sockets.sockets.forEach(s => {
-                s.hasBet = false;
-            });
-
-            setTimeout(startGame, 3000);
+            crashGame();
         }
 
-    }, 100);
+    }, parseInt(process.env.GAME_TICK_RATE || 100));
 }
 
-function generateCrashPoint() {
-    return (Math.random() * 5 + 1).toFixed(2);
+function crashGame() {
+    running = false;
+
+    io.emit('game:crash', { multiplier });
+
+    clearInterval(gameInterval);
+
+    // Reset bets
+    io.sockets.sockets.forEach(socket => {
+        if (socket.hasBet) {
+            socket.emit('bet:lost', {
+                balance: socket.user.balance
+            });
+        }
+        socket.hasBet = false;
+    });
+
+    setTimeout(startGame, 3000);
 }
 
 // =======================
 // SOCKET EVENTS
 // =======================
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.user.username);
+    console.log('Connected:', socket.user.username);
 
     socket.emit('player:data', {
         balance: socket.user.balance
@@ -161,9 +187,7 @@ io.on('connection', (socket) => {
     socket.hasBet = false;
     socket.betAmount = 0;
 
-    // ===================
     // PLACE BET
-    // ===================
     socket.on('bet:place', ({ amount }) => {
         amount = parseFloat(amount);
 
@@ -175,8 +199,12 @@ io.on('connection', (socket) => {
             return socket.emit('bet:error', { error: "Already bet" });
         }
 
+        if (amount <= 0 || isNaN(amount)) {
+            return socket.emit('bet:error', { error: "Invalid amount" });
+        }
+
         if (amount > socket.user.balance) {
-            return socket.emit('bet:error', { error: "Not enough balance" });
+            return socket.emit('bet:error', { error: "Insufficient balance" });
         }
 
         socket.user.balance -= amount;
@@ -188,15 +216,14 @@ io.on('connection', (socket) => {
         });
     });
 
-    // ===================
     // CASHOUT
-    // ===================
     socket.on('bet:cashout', () => {
         if (!running || !socket.hasBet) return;
 
         const payout = socket.betAmount * multiplier;
 
         socket.user.balance += payout;
+
         socket.hasBet = false;
 
         socket.emit('bet:cashout:confirmed', {
@@ -205,9 +232,6 @@ io.on('connection', (socket) => {
         });
     });
 
-    // ===================
-    // DISCONNECT
-    // ===================
     socket.on('disconnect', () => {
         console.log('Disconnected:', socket.user.username);
     });
@@ -216,7 +240,7 @@ io.on('connection', (socket) => {
 // =======================
 // START SERVER
 // =======================
-server.listen(3000, () => {
-    console.log("Server running on http://localhost:3000");
+server.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
     startGame();
 });
