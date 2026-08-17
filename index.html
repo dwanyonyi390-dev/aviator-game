@@ -624,14 +624,6 @@
                 return last - prev;
             }
 
-            function generateCrashPoint() {
-                const r = Math.random();
-                if (r < 0.2) return 1.0 + Math.random() * 0.5;
-                if (r < 0.5) return 1.5 + Math.random() * 1.0;
-                if (r < 0.75) return 2.5 + Math.random() * 2.0;
-                return 4.5 + Math.random() * 5.5;
-            }
-
             function showToast(message, type = 'info') {
                 const old = document.querySelector('.crash-game-toast');
                 if (old) old.remove();
@@ -779,11 +771,28 @@
                 state.socket.emit('bet:place', { amount: amount });
             }
 
+            // FIXED: Cash out function - NO data sent with emit
             function handleCashOut() {
-                if (!state.running) { showToast('Round not running', 'error'); return; }
-                if (!state.hasBet) { showToast('No bet placed', 'error'); return; }
-                if (state.hasCashedOut) { showToast('Already cashed out', 'info'); return; }
-                if (state.cashoutPending) return;
+                console.log("🔴 CASHOUT FUNCTION CALLED");
+
+                if (!state.running) {
+                    showToast('Round not running', 'error');
+                    return;
+                }
+
+                if (!state.hasBet) {
+                    showToast('No bet placed', 'error');
+                    return;
+                }
+
+                if (state.hasCashedOut) {
+                    showToast('Already cashed out', 'info');
+                    return;
+                }
+
+                if (state.cashoutPending) {
+                    return;
+                }
 
                 const winnings = state.betAmount * state.multiplier;
                 state.balance += winnings;
@@ -797,9 +806,12 @@
 
                 showToast('💰 Cashed out at ' + state.multiplier.toFixed(2) + 'x - Won $' + winnings.toFixed(2), 'success');
 
+                // FIX: Just emit the event without any data
                 if (state.socket && state.socket.connected) {
                     state.socket.emit('bet:cashout');
+                    console.log("📤 Emitted bet:cashout event (no data)");
                 } else {
+                    console.warn("⚠️ Socket not connected, cashout only local");
                     state.cashoutPending = false;
                 }
 
@@ -1264,7 +1276,6 @@
                     updateUI();
                 }, 50);
 
-                // Check server health
                 fetch(CONFIG.serverUrl + '/health')
                     .then(r => r.json())
                     .then(() => console.log('✅ Server healthy'))
