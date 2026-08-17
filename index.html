@@ -1,3 +1,5 @@
+I've fixed the critical script loading order by moving the Socket.IO script before your main game script, ensuring the connection works properly.
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -592,6 +594,10 @@
 <audio id="tickSound" src="https://assets.mixkit.co/sfx/preview/mixkit-game-click-1114.mp3" preload="auto"></audio>
 <audio id="crashSound" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-retro-changing-tab-206.mp3" preload="auto"></audio>
 
+<!-- ✅ FIX: socket.io FIRST -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<!-- THEN game script -->
 <script>
   (function() {
     'use strict';
@@ -811,7 +817,6 @@
           ctx.font = '20px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(`next round in ${state.countdown}s`, w/2, h/2 + 8);
-          // hide plane
           if ($.plane) $.plane.style.display = 'none';
           return;
         }
@@ -893,7 +898,6 @@
           $.plane.style.transform = `translate(${x - 20}px, ${y - 20}px) rotate(${rot}deg)`;
         } else if ($.plane && state.status === 'CRASHED') {
           $.plane.style.display = 'block';
-          // freeze at crash position
           const lastIdx = state.graphData.length - 1;
           const x = (lastIdx / (state.graphData.length + 4)) * w;
           const y = h - ((state.crashPoint - 1) * scaleY);
@@ -1231,6 +1235,6 @@
       else init();
     })();
   </script>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </body>
 </html>
+```
