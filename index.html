@@ -652,22 +652,51 @@
                 ANCHOR_POINTS: 30
             };
 
-            // ============================================
-            // GLOBAL VARIABLES
-            // ============================================
-            var cameraX = 0;
-            var cameraY = 0;
-            var takeoffProgress = 0;
-            var fireTrail = [];
-            var smoothThickness = 2;
-            var explosion = {
-                active: false,
-                x: 0,
-                y: 0,
-                radius: 0,
-                particles: []
-            };
+           // ============================================
+// GLOBAL VARIABLES (CLASSIC AVIATOR ENGINE)
+// ============================================
 
+// 🎥 Camera (smooth follow)
+var cameraX = 0;
+var cameraY = 0;
+var cameraTargetX = 0;
+var cameraTargetY = 0;
+var cameraSmooth = 0.08;
+
+// ✈️ Plane physics
+var plane = {
+    x: 0,
+    y: 0,
+    angle: 0,
+    velocity: 0,
+    acceleration: 0.0025,   // growth feel
+    maxVelocity: 2.5
+};
+
+// 🚀 Takeoff animation
+var takeoffProgress = 0;
+var takeoffSpeed = 0.02;
+
+// 🔥 Fire trail (smooth glowing trail)
+var fireTrail = [];
+var trailMax = 40;
+var trailFade = 0.92;
+var trailThickness = 3;
+
+// 🎨 Curve smoothing
+var smoothThickness = 2.5;
+
+// 💥 Explosion system (PRO)
+var explosion = {
+    active: false,
+    x: 0,
+    y: 0,
+    radius: 0,
+    maxRadius: 80,
+    growth: 4,
+    particles: [],
+    particleCount: 30
+};
             // ============================================
             // DOM REFS
             // ============================================
