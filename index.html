@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Crash Game</title>
+    <title>🚀 Aviator · Classic Crash</title>
     <style>
         /* ============================================
            MAIN STYLES
@@ -97,6 +97,12 @@
         .crash-game-multiplier .value.running {
             color: #ffd93d;
             text-shadow: 0 0 30px rgba(255, 217, 61, 0.3);
+            animation: pulseMul 0.6s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulseMul {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.06); }
         }
 
         .crash-game-multiplier .value.crashed {
@@ -131,6 +137,7 @@
             background: rgba(0, 0, 0, 0.6);
             border: 1px solid rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(4px);
+            z-index: 5;
         }
 
         .crash-game-status.waiting {
@@ -138,8 +145,8 @@
         }
 
         .crash-game-status.running {
-            color: #00d4ff;
-            border-color: rgba(0, 212, 255, 0.3);
+            color: #ffd93d;
+            border-color: rgba(255, 217, 61, 0.3);
         }
 
         .crash-game-status.crashed {
@@ -163,6 +170,7 @@
             color: rgba(255, 255, 255, 0.05);
             pointer-events: none;
             transition: all 0.3s ease;
+            z-index: 3;
         }
 
         .crash-game-countdown.active {
@@ -652,51 +660,51 @@
                 ANCHOR_POINTS: 30
             };
 
-           // ============================================
-// GLOBAL VARIABLES (CLASSIC AVIATOR ENGINE)
-// ============================================
+            // ============================================
+            // GLOBAL VARIABLES (CLASSIC AVIATOR ENGINE)
+            // ============================================
 
-// 🎥 Camera (smooth follow)
-var cameraX = 0;
-var cameraY = 0;
-var cameraTargetX = 0;
-var cameraTargetY = 0;
-var cameraSmooth = 0.08;
+            // 🎥 Camera (smooth follow)
+            var cameraX = 0;
+            var cameraY = 0;
+            var cameraTargetX = 0;
+            var cameraTargetY = 0;
+            var cameraSmooth = 0.08;
 
-// ✈️ Plane physics (classic feel)
-var plane = {
-    x: 0,
-    y: 0,
-    angle: 0,
-    velocity: 0,
-    acceleration: 0.0025,
-    maxVelocity: 2.5
-};
+            // ✈️ Plane physics (classic feel)
+            var plane = {
+                x: 0,
+                y: 0,
+                angle: 0,
+                velocity: 0,
+                acceleration: 0.0025,
+                maxVelocity: 2.5
+            };
 
-// 🚀 Takeoff animation
-var takeoffProgress = 0;
-var takeoffSpeed = 0.02;
+            // 🚀 Takeoff animation
+            var takeoffProgress = 0;
+            var takeoffSpeed = 0.02;
 
-// 🔥 Fire trail (clean + classic)
-var fireTrail = [];
-var trailMax = 40;
-var trailFade = 0.92;
-var trailThickness = 3;
+            // 🔥 Fire trail (clean + classic)
+            var fireTrail = [];
+            var trailMax = 40;
+            var trailFade = 0.92;
+            var trailThickness = 3;
 
-// 🎨 Curve smoothness
-var smoothThickness = 2.5;
+            // 🎨 Curve smoothness
+            var smoothThickness = 2.5;
 
-// 💥 Explosion system (improved but simple)
-var explosion = {
-    active: false,
-    x: 0,
-    y: 0,
-    radius: 0,
-    maxRadius: 80,
-    growth: 4,
-    particles: [],
-    particleCount: 30
-};
+            // 💥 Explosion system (improved but simple)
+            var explosion = {
+                active: false,
+                x: 0,
+                y: 0,
+                radius: 0,
+                maxRadius: 80,
+                growth: 4,
+                particles: [],
+                particleCount: 30
+            };
 
             // ============================================
             // DOM REFS
@@ -906,7 +914,7 @@ var explosion = {
             }
 
             // ============================================
-            // HANDLE PLACE BET
+            // HANDLE PLACE BET - FIXED
             // ============================================
             function handlePlaceBet() {
                 console.log('🎯 Place Bet clicked');
@@ -959,10 +967,17 @@ var explosion = {
             }
 
             // ============================================
-            // HANDLE CASH OUT
+            // HANDLE CASH OUT - FIXED
             // ============================================
             function handleCashOut() {
                 console.log("🔴 CASHOUT FUNCTION CALLED");
+                console.log("State:", {
+                    running: state.running,
+                    hasBet: state.hasBet,
+                    hasCashedOut: state.hasCashedOut,
+                    cashoutPending: state.cashoutPending,
+                    multiplier: state.multiplier
+                });
 
                 if (!state.running) {
                     showToast('Round not running', 'error');
@@ -980,28 +995,47 @@ var explosion = {
                 }
 
                 if (state.cashoutPending) {
+                    showToast('Cashout in progress...', 'info');
                     return;
                 }
 
+                // Calculate winnings
                 var winnings = state.betAmount * state.multiplier;
+                console.log("💰 Winnings:", winnings, "at multiplier:", state.multiplier);
+
+                // Update balance
                 state.balance += winnings;
                 state.hasCashedOut = true;
                 state.cashoutPending = true;
 
+                // Update UI
                 if (DOM.balance) {
                     DOM.balance.textContent = '$' + state.balance.toFixed(2);
                 }
                 if (DOM.cashout) {
-                    DOM.cashout.textContent = 'CASHED ✓';
+                    DOM.cashout.textContent = '✅ CASHED';
                     DOM.cashout.disabled = true;
                     DOM.cashout.classList.remove('cashing');
                 }
 
                 showToast('💰 Cashed out at ' + state.multiplier.toFixed(2) + 'x - Won $' + winnings.toFixed(2), 'success');
 
-                if (state.socket) {
-                    state.socket.emit('bet:cashout');
+                // Send to server
+                if (state.socket && state.socket.connected) {
+                    state.socket.emit('bet:cashout', { 
+                        multiplier: state.multiplier,
+                        payout: winnings 
+                    });
+                    console.log("📤 Emitted bet:cashout event");
+                } else {
+                    console.warn("⚠️ Socket not connected, cashout only local");
+                    state.cashoutPending = false;
                 }
+
+                // Update UI again after a moment
+                setTimeout(function() {
+                    updateUI();
+                }, 100);
             }
 
             // ============================================
@@ -1053,6 +1087,12 @@ var explosion = {
                 state.running = false;
                 state.isCrashed = true;
                 state.roundStarted = false;
+
+                // Activate explosion
+                explosion.active = true;
+                explosion.x = plane.x || 600;
+                explosion.y = plane.y || 200;
+                explosion.radius = 0;
 
                 if (!state.hasCashedOut && state.hasBet) {
                     showToast('💥 You lost your bet!', 'error');
@@ -1144,191 +1184,218 @@ var explosion = {
             }
 
             // ============================================
-            // DRAW GRAPH - UPDATED VERSION
+            // DRAW GRAPH - UPDATED WITH PLANE
             // ============================================
-           function drawGraph() {
-    if (!canvasCtx) return;
+            function drawGraph() {
+                if (!canvasCtx) return;
 
-    const ctx = canvasCtx;
-    const w = canvasWidth;
-    const h = canvasHeight;
+                const ctx = canvasCtx;
+                const w = canvasWidth;
+                const h = canvasHeight;
 
-    // Clear
-    ctx.clearRect(0, 0, w, h);
+                // Clear
+                ctx.clearRect(0, 0, w, h);
 
-    // Background
-    ctx.fillStyle = "#0b1026";
-    ctx.fillRect(0, 0, w, h);
+                // Background
+                ctx.fillStyle = "#0b1026";
+                ctx.fillRect(0, 0, w, h);
 
-    // === GRID ===
-    ctx.strokeStyle = "rgba(255,255,255,0.04)";
-    ctx.lineWidth = 1;
+                // === GRID ===
+                ctx.strokeStyle = "rgba(255,255,255,0.04)";
+                ctx.lineWidth = 1;
 
-    for (let x = 0; x < w; x += 60) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
-        ctx.stroke();
-    }
-    for (let y = 0; y < h; y += 60) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
-    }
+                for (let x = 0; x < w; x += 60) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, h);
+                    ctx.stroke();
+                }
+                for (let y = 0; y < h; y += 60) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(w, y);
+                    ctx.stroke();
+                }
 
-    // WAITING
-    if (state.status === "WAITING") {
-        ctx.fillStyle = "rgba(255,255,255,0.2)";
-        ctx.font = "22px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText(`Next round in ${state.countdown}s`, w / 2, h / 2);
-        return;
-    }
+                // WAITING
+                if (state.status === "WAITING") {
+                    ctx.fillStyle = "rgba(255,255,255,0.2)";
+                    ctx.font = "22px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText(`Next round in ${state.countdown}s`, w / 2, h / 2);
+                    return;
+                }
 
-    if (state.graphData.length < 2) return;
+                if (state.graphData.length < 2) return;
 
-    // SCALE
-    let max = Math.max(...state.graphData.map(p => p.multiplier));
-    if (state.crashPoint > max) max = state.crashPoint;
-    if (max < 2) max = 2;
+                // SCALE
+                let max = Math.max(...state.graphData.map(p => p.multiplier));
+                if (state.crashPoint > max) max = state.crashPoint;
+                if (max < 2) max = 2;
 
-    const scaleY = h / (max - 1);
+                const scaleY = h / (max - 1);
+                
+                // Get last point for plane position
+                const lastIndex = state.graphData.length - 1;
+                const lastX = (lastIndex / (state.graphData.length + 5)) * w;
+                const lastY = h - ((state.graphData[lastIndex].multiplier - 1) * scaleY);
 
-    // === DRAW CURVE ===
-   ctx.beginPath();
+                // === DRAW CURVE with smooth quadratic ===
+                ctx.beginPath();
 
-for (let i = 0; i < state.graphData.length - 1; i++) {
-    const p0 = state.graphData[i];
-    const p1 = state.graphData[i + 1];
+                for (let i = 0; i < state.graphData.length - 1; i++) {
+                    const p0 = state.graphData[i];
+                    const p1 = state.graphData[i + 1];
 
-    const x0 = (i / (state.graphData.length + 5)) * w;
-    const y0 = h - ((p0.multiplier - 1) * scaleY);
+                    const x0 = (i / (state.graphData.length + 5)) * w;
+                    const y0 = h - ((p0.multiplier - 1) * scaleY);
 
-    const x1 = ((i + 1) / (state.graphData.length + 5)) * w;
-    const y1 = h - ((p1.multiplier - 1) * scaleY);
+                    const x1 = ((i + 1) / (state.graphData.length + 5)) * w;
+                    const y1 = h - ((p1.multiplier - 1) * scaleY);
 
-    // Control points for smooth curve
-    const cpX = (x0 + x1) / 2;
+                    const cpX = (x0 + x1) / 2;
 
-    if (i === 0) {
-        ctx.moveTo(x0, y0);
-    }
+                    if (i === 0) {
+                        ctx.moveTo(x0, y0);
+                    }
 
-    ctx.quadraticCurveTo(cpX, y0, x1, y1);
-}
+                    ctx.quadraticCurveTo(cpX, y0, x1, y1);
+                }
 
-    ctx.strokeStyle = "#ffcc00";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+                ctx.strokeStyle = "#ffcc00";
+                ctx.lineWidth = 2.5;
+                ctx.shadowColor = "rgba(255,204,0,0.2)";
+                ctx.shadowBlur = 10;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
 
-    // === FILL ===
-    ctx.lineTo(w, h);
-    ctx.lineTo(0, h);
-    ctx.closePath();
+                // === FILL ===
+                ctx.lineTo(w, h);
+                ctx.lineTo(0, h);
+                ctx.closePath();
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, "rgba(255,204,0,0.15)");
-    gradient.addColorStop(1, "rgba(255,204,0,0.01)");
+                const gradient = ctx.createLinearGradient(0, 0, 0, h);
+                gradient.addColorStop(0, "rgba(255,204,0,0.12)");
+                gradient.addColorStop(1, "rgba(255,204,0,0.01)");
 
-    ctx.fillStyle = gradient;
-    ctx.fill();
+                ctx.fillStyle = gradient;
+                ctx.fill();
 
-    // =========================
-    // ✈️ PLANE POSITION
-    // =========================
-    let planeX = lastX;
-    let planeY = lastY;
+                // Update plane position for fire trail
+                plane.x = lastX;
+                plane.y = lastY;
 
-    // === FIRE TRAIL ===
-    fireTrail.push({ x: planeX, y: planeY });
-    if (fireTrail.length > 25) fireTrail.shift();
+                // === FIRE TRAIL ===
+                if (state.status === "RUNNING") {
+                    fireTrail.push({ x: lastX, y: lastY });
+                    if (fireTrail.length > 25) fireTrail.shift();
 
-    for (let i = 0; i < fireTrail.length; i++) {
-        const p = fireTrail[i];
-        const alpha = i / fireTrail.length;
+                    for (let i = 0; i < fireTrail.length; i++) {
+                        const p = fireTrail[i];
+                        const alpha = (i / fireTrail.length) * 0.8;
+                        const size = 3 + (i / fireTrail.length) * 4;
 
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 2 + alpha * 2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,150,0,${alpha})`;
-        ctx.fill();
-    }
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(255,150,50,${alpha})`;
+                        ctx.fill();
+                    }
+                }
 
-    // =========================
-    // ✈️ DRAW PLANE
-    // =========================
-    if (state.status === "RUNNING") {
-        ctx.save();
-        ctx.translate(planeX, planeY);
+                // === DRAW PLANE ===
+                if (state.status === "RUNNING") {
+                    ctx.save();
+                    ctx.translate(lastX, lastY);
 
-        // rotate based on slope
-        const speed = getSpeed();
-        const angle = Math.min(0.8, speed * 10);
-        ctx.rotate(-angle);
+                    // Rotate based on speed
+                    const speed = getSpeed();
+                    const angle = Math.min(0.6, speed * 8);
+                    ctx.rotate(-angle);
 
-        // body
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-14, -5);
-        ctx.lineTo(-10, 0);
-        ctx.lineTo(-14, 5);
-        ctx.closePath();
-        ctx.fill();
+                    // Plane body
+                    ctx.fillStyle = "#ffffff";
+                    ctx.shadowColor = "rgba(255,204,0,0.3)";
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(-14, -5);
+                    ctx.lineTo(-10, 0);
+                    ctx.lineTo(-14, 5);
+                    ctx.closePath();
+                    ctx.fill();
 
-        // wing
-        ctx.fillStyle = "#cccccc";
-        ctx.fillRect(-10, -2, 6, 4);
+                    // Wing
+                    ctx.fillStyle = "#dddddd";
+                    ctx.shadowBlur = 0;
+                    ctx.fillRect(-10, -2, 6, 4);
 
-        ctx.restore();
-    }
+                    // Cockpit
+                    ctx.fillStyle = "#88ccff";
+                    ctx.beginPath();
+                    ctx.arc(-4, 0, 2, 0, Math.PI * 2);
+                    ctx.fill();
 
-    // =========================
-    // 💥 EXPLOSION
-    // =========================
-    if (state.status === "CRASHED") {
-        if (!explosion.active) {
-            explosion.active = true;
-            explosion.x = planeX;
-            explosion.y = planeY;
-            explosion.radius = 0;
-        }
+                    ctx.restore();
+                }
 
-        if (explosion.active) {
-            explosion.radius += 3;
+                // === EXPLOSION ===
+                if (state.status === "CRASHED") {
+                    if (explosion.active) {
+                        explosion.radius += 4;
 
-            ctx.beginPath();
-            ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(255,80,0,0.4)";
-            ctx.fill();
+                        // Outer glow
+                        ctx.beginPath();
+                        ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
+                        const grad = ctx.createRadialGradient(
+                            explosion.x, explosion.y, 0,
+                            explosion.x, explosion.y, explosion.radius
+                        );
+                        grad.addColorStop(0, "rgba(255,200,50,0.6)");
+                        grad.addColorStop(0.5, "rgba(255,100,0,0.4)");
+                        grad.addColorStop(1, "rgba(255,50,0,0)");
+                        ctx.fillStyle = grad;
+                        ctx.fill();
 
-            if (explosion.radius > 40) {
-                explosion.active = false;
+                        // Inner core
+                        ctx.beginPath();
+                        ctx.arc(explosion.x, explosion.y, explosion.radius * 0.3, 0, Math.PI * 2);
+                        ctx.fillStyle = "rgba(255,255,200,0.8)";
+                        ctx.fill();
+
+                        if (explosion.radius > 60) {
+                            explosion.active = false;
+                        }
+                    }
+
+                    // Crash line
+                    const crashY = h - ((state.crashPoint - 1) * scaleY);
+                    ctx.setLineDash([6, 6]);
+                    ctx.strokeStyle = "#ff3b3b";
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, crashY);
+                    ctx.lineTo(w, crashY);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Crash label
+                    ctx.fillStyle = "#ff4757";
+                    ctx.font = "bold 15px Arial";
+                    ctx.textAlign = "right";
+                    ctx.fillText(state.crashPoint.toFixed(2) + "x", w - 10, crashY - 8);
+                }
+
+                // === LIVE LABEL ===
+                if (state.status === "RUNNING") {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "bold 14px Arial";
+                    ctx.textAlign = "right";
+                    ctx.shadowColor = "rgba(0,0,0,0.5)";
+                    ctx.shadowBlur = 8;
+                    ctx.fillText(state.multiplier.toFixed(2) + "x", w - 12, lastY - 15);
+                    ctx.shadowBlur = 0;
+                }
             }
-        }
-
-        // crash line
-        const crashY = h - ((state.crashPoint - 1) * scaleY);
-
-        ctx.setLineDash([6, 6]);
-        ctx.strokeStyle = "#ff3b3b";
-        ctx.beginPath();
-        ctx.moveTo(0, crashY);
-        ctx.lineTo(w, crashY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-    }
-
-    // =========================
-    // LABEL
-    // =========================
-    if (state.status === "RUNNING") {
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 14px Arial";
-        ctx.textAlign = "right";
-        ctx.fillText(state.multiplier.toFixed(2) + "x", w - 10, planeY - 10);
-    }
-}
 
             // ============================================
             // UI UPDATE
@@ -1366,10 +1433,10 @@ for (let i = 0; i < state.graphData.length - 1; i++) {
                     var canCashout = state.running && state.hasBet && !state.hasCashedOut && !state.cashoutPending;
                     DOM.cashout.disabled = !canCashout;
                     if (canCashout) {
-                        DOM.cashout.textContent = 'CASH OUT';
+                        DOM.cashout.textContent = '💰 CASH OUT';
                         DOM.cashout.classList.add('cashing');
                     } else if (state.hasCashedOut) {
-                        DOM.cashout.textContent = 'CASHED ✓';
+                        DOM.cashout.textContent = '✅ CASHED';
                         DOM.cashout.classList.remove('cashing');
                     } else {
                         DOM.cashout.textContent = 'CASH OUT';
@@ -1598,10 +1665,15 @@ for (let i = 0; i < state.graphData.length - 1; i++) {
                     });
 
                     state.socket.on('bet:cashout:confirmed', function(data) {
-                        console.log('💰 Cashed out:', data);
+                        console.log('💰 Cashed out confirmed:', data);
                         state.hasCashedOut = true;
                         state.balance = data.balance;
                         state.cashoutPending = false;
+                        if (DOM.cashout) {
+                            DOM.cashout.textContent = '✅ CASHED';
+                            DOM.cashout.disabled = true;
+                            DOM.cashout.classList.remove('cashing');
+                        }
                         updateUI();
                         showToast('💰 Cashed out at ' + data.multiplier.toFixed(2) + 'x - Won $' + data.payout
                             .toFixed(2), 'success');
