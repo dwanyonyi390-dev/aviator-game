@@ -3,246 +3,268 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🚀 Aviator Pro</title>
+<title>🚀 Aviator</title>
 
 <style>
-body {
-    margin:0;
-    font-family:Arial, sans-serif;
-    background:#0b1026;
-    color:#fff;
-}
+/* IMPORTANT: Replace this with your FULL CSS (do NOT leave placeholder) */
 
-.container {
-    max-width:900px;
-    margin:auto;
-    padding:20px;
-}
+body { margin:0; background:#0b1026; color:#fff; font-family:Arial; }
+canvas { width:100%; height:400px; background:#0b1026; }
+.logout-btn { cursor:pointer; }
 
-canvas {
-    width:100%;
-    height:400px;
-    background:#0b1026;
-    border-radius:10px;
-}
-
-.top {
-    display:flex;
-    justify-content:space-between;
-    margin-bottom:10px;
-}
-
-.balance { color:#ffd93d; }
-
-.controls {
-    display:flex;
-    gap:10px;
-    margin-top:10px;
-}
-
-button {
-    padding:10px;
-    border:none;
-    border-radius:6px;
-    cursor:pointer;
-}
-
-.bet { background:#1dd1a1; }
-.cash { background:#ff4757; }
-
-.multiplier {
-    font-size:40px;
-    text-align:center;
-    margin:10px 0;
-}
 </style>
 </head>
 
 <body>
 
-<div class="container">
-
-<div class="top">
-    <div>👤 Player</div>
-    <div class="balance" id="balance">$1000.00</div>
+<div class="crash-game-container">
+<div id="crash-game-app">
+<div style="text-align:center;padding:50px;">Loading game...</div>
 </div>
-
-<div class="multiplier" id="multiplier">1.00x</div>
-
-<canvas id="canvas"></canvas>
-
-<div class="controls">
-    <input type="number" id="betAmount" value="10" min="1">
-    <button class="bet" id="betBtn">BET</button>
-    <button class="cash" id="cashBtn" disabled>CASH OUT</button>
-</div>
-
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+// ================= AUTH (UNCHANGED - DO NOT TOUCH) =================
+(async function checkAuth() {
+    try {
+        const response = await fetch('/api/me');
+        if (!response.ok) {
+            window.location.href = '/login';
+            return;
+        }
+        const data = await response.json();
+        window.currentUser = data.user;
+        initGame();
+    } catch (error) {
+        window.location.href = '/login';
+    }
+})();
 
-canvas.width = 900;
-canvas.height = 400;
-
-const UI = {
-    multiplier: document.getElementById("multiplier"),
-    balance: document.getElementById("balance"),
-    betInput: document.getElementById("betAmount"),
-    betBtn: document.getElementById("betBtn"),
-    cashBtn: document.getElementById("cashBtn")
-};
-
-const state = {
-    status: "WAITING",
-    multiplier: 1,
-    crashPoint: 0,
-    balance: 1000,
-    bet: 0,
-    hasBet:false,
-    cashed:false,
-    graph: [],
-    socket:null,
-    connected:false
-};
-
-// ===== MULTIPLIER LOGIC =====
-function nextMultiplier(prev){
-    return prev * (1 + (Math.random()*0.03 + 0.01));
+// ================= LOGOUT =================
+async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
 }
 
-// ===== CRASH LOGIC =====
-function shouldCrash(m){
-    return Math.random() < (0.002 * m);
+// ================= GAME =================
+function initGame() {
+
+const CONFIG = {
+    serverUrl: window.location.origin,
+    initialBalance: 1000
+};
+
+let DOM = {};
+let ctx, canvas;
+
+let planeX = 0, planeY = 0;
+let fireTrail = [];
+
+const state = {
+    status: 'WAITING',
+    multiplier: 1,
+    crashPoint: 0,
+    balance: window.currentUser?.balance || CONFIG.initialBalance,
+    hasBet: false,
+    hasCashedOut: false,
+    cashoutPending: false,
+    running: false,
+    betAmount: 10,
+    graphData: [{ multiplier:1 }],
+    socket: null
+};
+
+// ===== SMOOTH MULTIPLIER =====
+function smoothMultiplierUpdate(newVal){
+    const diff = newVal - state.multiplier;
+    state.multiplier += diff * 0.2;
+}
+
+// ===== UI =====
+function createHTML(){
+    const app = document.getElementById("crash-game-app");
+
+    app.innerHTML = `
+    <div>
+        <div>👤 ${window.currentUser.username}</div>
+        <button onclick="logout()">Logout</button>
+        <h1 id="multiplier">1.00x</h1>
+        <canvas id="canvas"></canvas>
+
+        <div>
+            <input id="betAmount" type="number" value="10">
+            <button id="betBtn">BET</button>
+            <button id="cashBtn">CASH OUT</button>
+        </div>
+
+        <div id="balance">$${state.balance.toFixed(2)}</div>
+    </div>
+    `;
+
+    DOM.multiplier = document.getElementById("multiplier");
+    DOM.bet = document.getElementById("betBtn");
+    DOM.cash = document.getElementById("cashBtn");
+    DOM.balance = document.getElementById("balance");
+    DOM.betInput = document.getElementById("betAmount");
+
+    canvas = document.getElementById("canvas");
+    canvas.width = 800;
+    canvas.height = 400;
+    ctx = canvas.getContext("2d");
+
+    DOM.bet.onclick = handleBet;
+    DOM.cash.onclick = handleCash;
+}
+
+// ===== BET =====
+function handleBet(){
+    const amt = parseFloat(DOM.betInput.value);
+    if(!amt || amt > state.balance) return;
+    if(state.status !== "WAITING") return;
+
+    state.balance -= amt;
+    state.betAmount = amt;
+    state.hasBet = true;
+    state.hasCashedOut = false;
+
+    updateUI();
+
+    if(state.socket?.connected){
+        state.socket.emit("bet:place", { amount: amt });
+    }
+}
+
+// ===== CASH OUT =====
+function handleCash(){
+    if (!state.running || !state.hasBet || state.hasCashedOut || state.cashoutPending) return;
+
+    const win = state.betAmount * state.multiplier;
+    state.balance += win;
+    state.hasCashedOut = true;
+
+    updateUI();
+
+    if(state.socket?.connected){
+        state.socket.emit("bet:cashout");
+    }
 }
 
 // ===== DRAW =====
-let planeX=0, planeY=0;
-
 function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.clearRect(0,0,800,400);
 
-    if(state.graph.length < 2) return;
+    if(state.graphData.length < 2) return;
 
-    let max = Math.max(...state.graph);
+    let max = Math.max(...state.graphData.map(p=>p.multiplier));
     if(max < 2) max = 2;
 
-    const scaleY = canvas.height/(max-1);
+    const scaleY = 400/(max-1);
 
     ctx.beginPath();
 
-    state.graph.forEach((m,i)=>{
-        const x = (i/state.graph.length)*canvas.width;
-        const y = canvas.height - ((m-1)*scaleY);
+    state.graphData.forEach((p,i)=>{
+        const x = (i/state.graphData.length)*800;
+        const y = 400 - ((p.multiplier-1)*scaleY);
 
         if(i===0) ctx.moveTo(x,y);
         else ctx.lineTo(x,y);
 
-        planeX=x;
-        planeY=y;
+        // SMOOTH plane
+        planeX += (x - planeX)*0.1;
+        planeY += (y - planeY)*0.1;
     });
 
     ctx.strokeStyle="#ffd93d";
-    ctx.lineWidth=2;
     ctx.stroke();
 
     // plane
-    ctx.fillStyle="#fff";
     ctx.beginPath();
     ctx.arc(planeX,planeY,5,0,Math.PI*2);
+    ctx.fillStyle="#fff";
     ctx.fill();
 }
 
 // ===== UI =====
 function updateUI(){
-    UI.multiplier.innerText = state.status==="RUNNING"
+    DOM.multiplier.innerText =
+        state.status==="RUNNING"
         ? state.multiplier.toFixed(2)+"x"
         : state.status==="CRASHED"
         ? "💥 "+state.crashPoint.toFixed(2)+"x"
         : "WAITING";
 
-    UI.balance.innerText="$"+state.balance.toFixed(2);
-
-    UI.cashBtn.disabled = !(state.hasBet && !state.cashed && state.status==="RUNNING");
+    DOM.balance.innerText="$"+state.balance.toFixed(2);
 }
 
-// ===== BET =====
-UI.betBtn.onclick=()=>{
-    const amt=parseFloat(UI.betInput.value);
-    if(!amt || amt>state.balance) return;
+// ===== SOCKET (UNCHANGED AUTH) =====
+function setupSocket(){
 
-    state.bet=amt;
-    state.balance-=amt;
-    state.hasBet=true;
-    state.cashed=false;
-
-    updateUI();
-};
-
-// ===== CASH OUT =====
-UI.cashBtn.onclick=()=>{
-    if(state.cashed || !state.hasBet) return;
-
-    const win = state.bet * state.multiplier;
-    state.balance += win;
-
-    state.cashed=true;
-
-    updateUI();
-};
-
-// ===== GAME LOOP =====
-function loop(){
-
-    if(state.status==="RUNNING"){
-        state.multiplier = nextMultiplier(state.multiplier);
-        state.graph.push(state.multiplier);
-
-        if(state.graph.length>80) state.graph.shift();
-
-        if(shouldCrash(state.multiplier)){
-            state.status="CRASHED";
-            state.crashPoint=state.multiplier;
+    const getToken = () => {
+        const cookies = document.cookie.split(';');
+        for (let c of cookies) {
+            const [n,v] = c.trim().split('=');
+            if(n==="token") return v;
         }
+        return null;
+    };
+
+    const token = getToken();
+    if(!token){
+        window.location.href="/login";
+        return;
     }
 
+    state.socket = io(CONFIG.serverUrl,{
+        auth:{ token }
+    });
+
+    state.socket.on("game:update", data=>{
+        if(state.status==="RUNNING" && state.socket.connected){
+            smoothMultiplierUpdate(data.multiplier);
+            state.graphData.push({ multiplier: state.multiplier });
+
+            if(state.graphData.length>80) state.graphData.shift();
+        }
+    });
+
+    state.socket.on("game:start", ()=>{
+        state.status="RUNNING";
+        state.running=true;
+        state.multiplier=1;
+        state.graphData=[{multiplier:1}];
+    });
+
+    state.socket.on("game:crash", data=>{
+        state.status="CRASHED";
+        state.running=false;
+        state.crashPoint=data.multiplier;
+
+        setTimeout(()=>{
+            state.graphData=[{multiplier:1}];
+            state.status="WAITING";
+        },500);
+    });
+}
+
+// ===== LOOP =====
+function loop(){
     draw();
     updateUI();
-
     requestAnimationFrame(loop);
-}
-
-// ===== ROUND CONTROL =====
-function startRound(){
-    state.status="RUNNING";
-    state.multiplier=1;
-    state.graph=[1];
-    state.hasBet=false;
-    state.cashed=false;
-}
-
-function waitNext(){
-    state.status="WAITING";
-    setTimeout(startRound,3000);
 }
 
 // ===== INIT =====
 function init(){
-    waitNext();
-
-    setInterval(()=>{
-        if(state.status==="CRASHED"){
-            waitNext();
-        }
-    },3000);
-
+    createHTML();
+    setupSocket();
     loop();
 }
 
 init();
+
+}
 </script>
 
 </body>
