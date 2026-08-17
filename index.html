@@ -598,7 +598,6 @@
             .crash-game-btn { font-size: 11px; padding: 6px 8px; min-width: 35px; }
         }
 
-        /* Loading screen */
         #loading-screen {
             display: flex;
             flex-direction: column;
@@ -624,17 +623,12 @@
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
-
-        .game-hidden {
-            display: none !important;
-        }
     </style>
 </head>
 <body>
 
     <div class="crash-game-container">
         <div id="crash-game-app">
-            <!-- Loading Screen -->
             <div id="loading-screen">
                 <div class="spinner"></div>
                 <p style="margin-top:20px;font-size:16px;">Loading game...</p>
@@ -646,7 +640,7 @@
 
     <script>
         // ============================================
-        // CHECK AUTHENTICATION AND START GAME
+        // CHECK AUTHENTICATION
         // ============================================
         (async function init() {
             'use strict';
@@ -654,10 +648,9 @@
             console.log('🚀 Starting game...');
             
             try {
-                // Check authentication
                 const response = await fetch('/api/me');
                 if (!response.ok) {
-                    console.log('❌ Not authenticated, redirecting to login...');
+                    console.log('❌ Not authenticated, redirecting...');
                     window.location.href = '/login';
                     return;
                 }
@@ -666,7 +659,12 @@
                 const user = data.user;
                 console.log('✅ Authenticated as:', user.username);
                 
-                // Start the game (loading screen will be hidden inside)
+                // Hide loading screen and start game
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) {
+                    loadingScreen.classList.add('hidden');
+                }
+                
                 startGame(user);
                 
             } catch (error) {
@@ -676,7 +674,7 @@
         })();
 
         // ============================================
-        // LOGOUT FUNCTION
+        // LOGOUT
         // ============================================
         window.logout = async function() {
             try {
@@ -688,18 +686,12 @@
         };
 
         // ============================================
-        // GAME FUNCTION
+        // GAME ENGINE
         // ============================================
         function startGame(user) {
             'use strict';
             
             console.log('🎮 Starting game for:', user.username);
-            
-            // Hide loading screen
-            const loadingScreen = document.getElementById('loading-screen');
-            if (loadingScreen) {
-                loadingScreen.classList.add('hidden');
-            }
             
             const CONFIG = {
                 initialBalance: 1000,
@@ -709,7 +701,6 @@
                 MAX_POINTS: 120
             };
 
-            // Game state
             const state = {
                 status: 'WAITING',
                 multiplier: 1.00,
@@ -729,10 +720,7 @@
                 username: user.username
             };
 
-            // DOM references
             const DOM = {};
-
-            // Canvas variables
             let canvasCtx = null;
             let canvasWidth = 0;
             let canvasHeight = 0;
@@ -742,10 +730,6 @@
             let explosion = { active: false, x: 0, y: 0, radius: 0 };
             let gameLoopInterval = null;
 
-            // ============================================
-            // HELPER FUNCTIONS
-            // ============================================
-            
             function getSpeed() {
                 if (state.graphData.length < 2) return 0;
                 const last = state.graphData[state.graphData.length - 1].multiplier;
@@ -768,10 +752,6 @@
                 }, 3000);
             }
 
-            // ============================================
-            // CREATE GAME HTML
-            // ============================================
-            
             function createGameHTML() {
                 const app = document.getElementById('crash-game-app');
                 if (!app) {
@@ -841,7 +821,6 @@
                     </div>
                 `;
 
-                // Get DOM references
                 const elements = {
                     multiplier: 'multiplierDisplay',
                     statusBadge: 'statusBadge',
@@ -869,10 +848,6 @@
                 return true;
             }
 
-            // ============================================
-            // EVENT LISTENERS
-            // ============================================
-            
             function setupEventListeners() {
                 DOM.placeBet.onclick = (e) => { e.preventDefault(); handlePlaceBet(); };
                 DOM.cashout.onclick = (e) => { e.preventDefault(); handleCashOut(); };
@@ -903,10 +878,6 @@
                 console.log('✅ Event listeners set up');
             }
 
-            // ============================================
-            // GAME ACTIONS
-            // ============================================
-            
             function handlePlaceBet() {
                 const amount = parseFloat(DOM.betAmount.value);
                 if (!amount || amount <= 0) { showToast('Enter valid amount', 'error'); return; }
@@ -991,10 +962,6 @@
                 showToast('🚀 Round started!', 'success');
             }
 
-            // ============================================
-            // CANVAS
-            // ============================================
-            
             function initCanvas() {
                 if (!DOM.canvas) {
                     console.error('❌ Canvas element not found');
@@ -1024,7 +991,6 @@
                 ctx.fillStyle = "#0b1026";
                 ctx.fillRect(0, 0, w, h);
 
-                // Grid
                 ctx.strokeStyle = "rgba(255,255,255,0.04)";
                 ctx.lineWidth = 1;
                 for (let x = 0; x < w; x += 60) {
@@ -1059,7 +1025,6 @@
                 planeX = (lastIndex / (state.graphData.length + 5)) * w;
                 planeY = h - ((state.graphData[lastIndex].multiplier - 1) * scaleY);
 
-                // Draw curve
                 ctx.beginPath();
                 for (let i = 0; i < state.graphData.length - 1; i++) {
                     const p0 = state.graphData[i];
@@ -1080,7 +1045,6 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0;
 
-                // Fill
                 ctx.lineTo(w, h);
                 ctx.lineTo(0, h);
                 ctx.closePath();
@@ -1090,7 +1054,6 @@
                 ctx.fillStyle = grad;
                 ctx.fill();
 
-                // Fire trail
                 if (state.status === "RUNNING") {
                     fireTrail.push({ x: planeX, y: planeY });
                     if (fireTrail.length > 25) fireTrail.shift();
@@ -1105,7 +1068,6 @@
                     }
                 }
 
-                // Plane
                 if (state.status === "RUNNING") {
                     ctx.save();
                     ctx.translate(planeX, planeY);
@@ -1134,7 +1096,6 @@
                     ctx.restore();
                 }
 
-                // Explosion
                 if (state.status === "CRASHED" && explosion.active) {
                     explosion.radius += 4;
                     ctx.beginPath();
@@ -1148,7 +1109,6 @@
                     if (explosion.radius > 60) explosion.active = false;
                 }
 
-                // Crash line
                 if (state.status === "CRASHED") {
                     const crashY = h - ((state.crashPoint - 1) * scaleY);
                     ctx.setLineDash([6, 6]);
@@ -1165,7 +1125,6 @@
                     ctx.fillText(state.crashPoint.toFixed(2) + "x", w - 10, crashY - 8);
                 }
 
-                // Live label
                 if (state.status === "RUNNING") {
                     ctx.fillStyle = "#ffffff";
                     ctx.font = "bold 14px Arial";
@@ -1177,10 +1136,6 @@
                 }
             }
 
-            // ============================================
-            // UPDATE UI
-            // ============================================
-            
             function updateUI() {
                 if (!DOM.multiplier) return;
 
@@ -1244,13 +1199,8 @@
                 }
             }
 
-            // ============================================
-            // SOCKET SETUP
-            // ============================================
-            
             function setupSocket() {
                 try {
-                    // Get token from cookie
                     const getToken = () => {
                         const cookies = document.cookie.split(';');
                         for (let cookie of cookies) {
@@ -1461,40 +1411,27 @@
                 }
             }
 
-            // ============================================
-            // INITIALIZE GAME
-            // ============================================
-            
             function init() {
                 console.log('🚀 Initializing game...');
                 
                 try {
-                    // Create game HTML
                     if (!createGameHTML()) {
                         console.error('❌ Failed to create game HTML');
                         return;
                     }
 
-                    // Setup event listeners
                     setupEventListeners();
-
-                    // Initialize canvas
                     setTimeout(initCanvas, 100);
-
-                    // Setup socket
                     setupSocket();
 
-                    // Handle resize
                     let resizeTimeout;
                     window.addEventListener('resize', () => {
                         clearTimeout(resizeTimeout);
                         resizeTimeout = setTimeout(() => initCanvas(), 200);
                     });
 
-                    // Start UI update loop
                     setTimeout(updateUI, 200);
                     
-                    // Game loop
                     if (gameLoopInterval) clearInterval(gameLoopInterval);
                     gameLoopInterval = setInterval(() => {
                         if (explosion.active) {
@@ -1512,7 +1449,6 @@
                 }
             }
 
-            // Start the game
             init();
         }
     </script>
