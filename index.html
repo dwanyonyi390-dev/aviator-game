@@ -597,50 +597,82 @@
             .btn-group { gap: 4px; }
             .crash-game-btn { font-size: 11px; padding: 6px 8px; min-width: 35px; }
         }
+
+        /* Loading screen hidden by default */
+        #loading-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            color: #8892b0;
+        }
+
+        #loading-screen.hidden {
+            display: none !important;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 217, 61, 0.1);
+            border-top-color: #ffd93d;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
     </style>
 </head>
 <body>
 
     <div class="crash-game-container">
         <div id="crash-game-app">
-            <!-- Game will be rendered here -->
-            <div id="loading-screen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;color:#8892b0;">
-                <div style="width:50px;height:50px;border:4px solid rgba(255,217,61,0.1);border-top-color:#ffd93d;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+            <!-- Loading Screen -->
+            <div id="loading-screen">
+                <div class="spinner"></div>
                 <p style="margin-top:20px;font-size:16px;">Loading game...</p>
             </div>
         </div>
     </div>
 
-    <style>
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
-
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
     <script>
         // ============================================
-        // CHECK AUTHENTICATION
+        // CHECK AUTHENTICATION AND START GAME
         // ============================================
-        (async function checkAuth() {
+        (async function init() {
+            'use strict';
+            
+            console.log('🚀 Starting game...');
+            
             try {
+                // Check authentication
                 const response = await fetch('/api/me');
                 if (!response.ok) {
+                    console.log('❌ Not authenticated, redirecting to login...');
                     window.location.href = '/login';
                     return;
                 }
+                
                 const data = await response.json();
-                window.currentUser = data.user;
-                console.log('✅ Authenticated as:', data.user.username);
+                const user = data.user;
+                console.log('✅ Authenticated as:', user.username);
                 
-                // Remove loading screen and init game
+                // Hide loading screen
                 const loadingScreen = document.getElementById('loading-screen');
-                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (loadingScreen) {
+                    loadingScreen.classList.add('hidden');
+                }
                 
-                initGame();
+                // Start the game
+                startGame(user);
+                
             } catch (error) {
-                console.error('Auth error:', error);
+                console.error('❌ Auth error:', error);
                 window.location.href = '/login';
             }
         })();
@@ -658,15 +690,14 @@
         }
 
         // ============================================
-        // GAME INITIALIZATION
+        // GAME FUNCTION
         // ============================================
-        function initGame() {
+        function startGame(user) {
             'use strict';
-
-            console.log('🎮 Initializing game...');
-
+            
+            console.log('🎮 Starting game for:', user.username);
+            
             const CONFIG = {
-                serverUrl: window.location.origin,
                 initialBalance: 1000,
                 canvasHeight: 400,
                 canvasWidth: 800,
@@ -674,16 +705,7 @@
                 MAX_POINTS: 120
             };
 
-            let DOM = {};
-            let canvasCtx = null;
-            let canvasWidth = 0;
-            let canvasHeight = 0;
-            let fireTrail = [];
-            let planeX = 0;
-            let planeY = 0;
-            let explosion = { active: false, x: 0, y: 0, radius: 0 };
-            let gameLoopInterval = null;
-
+            // Game state
             const state = {
                 status: 'WAITING',
                 multiplier: 1.00,
@@ -693,16 +715,33 @@
                 isCrashed: false,
                 hasBet: false,
                 hasCashedOut: false,
-                balance: window.currentUser?.balance || CONFIG.initialBalance,
+                balance: user.balance || CONFIG.initialBalance,
                 graphData: [{ multiplier: 1.00 }],
                 isConnected: false,
                 cashoutPending: false,
                 socket: null,
                 running: false,
                 betAmount: 10,
-                username: window.currentUser?.username || 'Player'
+                username: user.username
             };
 
+            // DOM references
+            const DOM = {};
+
+            // Canvas variables
+            let canvasCtx = null;
+            let canvasWidth = 0;
+            let canvasHeight = 0;
+            let fireTrail = [];
+            let planeX = 0;
+            let planeY = 0;
+            let explosion = { active: false, x: 0, y: 0, radius: 0 };
+            let gameLoopInterval = null;
+
+            // ============================================
+            // HELPER FUNCTIONS
+            // ============================================
+            
             function getSpeed() {
                 if (state.graphData.length < 2) return 0;
                 const last = state.graphData[state.graphData.length - 1].multiplier;
@@ -725,6 +764,10 @@
                 }, 3000);
             }
 
+            // ============================================
+            // CREATE GAME HTML
+            // ============================================
+            
             function createGameHTML() {
                 const app = document.getElementById('crash-game-app');
                 if (!app) {
@@ -795,33 +838,37 @@
                 `;
 
                 // Get DOM references
-                DOM = {
-                    multiplier: document.getElementById('multiplierDisplay'),
-                    statusBadge: document.getElementById('statusBadge'),
-                    roundInfo: document.getElementById('roundInfo'),
-                    balance: document.getElementById('balanceDisplay'),
-                    betAmount: document.getElementById('betAmount'),
-                    placeBet: document.getElementById('placeBetBtn'),
-                    cashout: document.getElementById('cashoutBtn'),
-                    liveBets: document.getElementById('liveBets'),
-                    historyGrid: document.getElementById('historyGrid'),
-                    canvas: document.getElementById('gameCanvas'),
-                    countdown: document.getElementById('countdownDisplay'),
-                    playerList: document.getElementById('playerList')
+                const elements = {
+                    multiplier: 'multiplierDisplay',
+                    statusBadge: 'statusBadge',
+                    roundInfo: 'roundInfo',
+                    balance: 'balanceDisplay',
+                    betAmount: 'betAmount',
+                    placeBet: 'placeBetBtn',
+                    cashout: 'cashoutBtn',
+                    liveBets: 'liveBets',
+                    historyGrid: 'historyGrid',
+                    canvas: 'gameCanvas',
+                    countdown: 'countdownDisplay',
+                    playerList: 'playerList'
                 };
 
-                // Verify all elements exist
-                for (let key in DOM) {
+                for (let key in elements) {
+                    DOM[key] = document.getElementById(elements[key]);
                     if (!DOM[key]) {
                         console.error(`❌ DOM element ${key} not found`);
                         return false;
                     }
                 }
 
-                console.log('✅ Game HTML created successfully');
+                console.log('✅ Game HTML created');
                 return true;
             }
 
+            // ============================================
+            // EVENT LISTENERS
+            // ============================================
+            
             function setupEventListeners() {
                 DOM.placeBet.onclick = (e) => { e.preventDefault(); handlePlaceBet(); };
                 DOM.cashout.onclick = (e) => { e.preventDefault(); handleCashOut(); };
@@ -852,6 +899,10 @@
                 console.log('✅ Event listeners set up');
             }
 
+            // ============================================
+            // GAME ACTIONS
+            // ============================================
+            
             function handlePlaceBet() {
                 const amount = parseFloat(DOM.betAmount.value);
                 if (!amount || amount <= 0) { showToast('Enter valid amount', 'error'); return; }
@@ -936,6 +987,10 @@
                 showToast('🚀 Round started!', 'success');
             }
 
+            // ============================================
+            // CANVAS
+            // ============================================
+            
             function initCanvas() {
                 if (!DOM.canvas) {
                     console.error('❌ Canvas element not found');
@@ -1118,11 +1173,12 @@
                 }
             }
 
+            // ============================================
+            // UPDATE UI
+            // ============================================
+            
             function updateUI() {
-                if (!DOM.multiplier) {
-                    console.warn('⚠️ DOM not ready for UI update');
-                    return;
-                }
+                if (!DOM.multiplier) return;
 
                 if (state.status === 'WAITING') {
                     DOM.multiplier.className = 'value waiting';
@@ -1184,6 +1240,10 @@
                 }
             }
 
+            // ============================================
+            // SOCKET SETUP
+            // ============================================
+            
             function setupSocket() {
                 try {
                     // Get token from cookie
@@ -1203,7 +1263,7 @@
                         return;
                     }
 
-                    console.log('🔌 Connecting to socket with auth...');
+                    console.log('🔌 Connecting to socket...');
                     
                     state.socket = io({
                         transports: ['websocket', 'polling'],
@@ -1397,6 +1457,10 @@
                 }
             }
 
+            // ============================================
+            // INITIALIZE GAME
+            // ============================================
+            
             function init() {
                 console.log('🚀 Initializing game...');
                 
@@ -1448,5 +1512,6 @@
             init();
         }
     </script>
+
 </body>
 </html>
