@@ -165,11 +165,12 @@ function crash() {
     // Process all players who haven't cashed out
     players.forEach((player, socketId) => {
         if (player.hasBet && !player.cashedOut) {
-            // Player loses their bet
-            player.balance = Math.max(0, player.balance - player.betAmount);
+            // Player loses their bet - deduct from balance
+            const lostAmount = player.betAmount;
+            player.balance = Math.max(0, player.balance - lostAmount);
             player.hasBet = false;
             io.to(socketId).emit('bet:lost', {
-                amount: player.betAmount,
+                amount: lostAmount,
                 balance: player.balance
             });
         }
@@ -240,6 +241,7 @@ io.on('connection', (socket) => {
 
     // Handle bet placement
     socket.on('bet:place', (data) => {
+        console.log('📝 Bet placement from:', socket.id, data);
         const player = getPlayer(socket.id);
 
         if (gameState.status !== 'WAITING') {
@@ -263,11 +265,13 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Deduct from balance
         player.balance -= amount;
         player.betAmount = amount;
         player.hasBet = true;
         player.cashedOut = false;
 
+        // Add to active bets
         playerBets.push({
             socketId: socket.id,
             amount: amount
@@ -278,11 +282,12 @@ io.on('connection', (socket) => {
             balance: player.balance
         });
 
+        console.log(`✅ Bet placed: $${amount} by ${socket.id}`);
         broadcastPlayerList();
     });
 
     // Handle cash out - FIXED: properly handles the event
-    socket.on('bet:cashout', (data) => {
+    socket.on('bet:cashout', () => {
         console.log('💰 Cashout requested by:', socket.id);
         const player = getPlayer(socket.id);
 
