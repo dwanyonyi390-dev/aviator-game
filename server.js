@@ -7,6 +7,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -36,12 +37,66 @@ app.use(cookieParser());
 app.use(express.static('public'));
 
 // =======================
-// FAKE DATABASE (TEMP)
+// FAKE DATABASE
 // =======================
 const users = [];
 
 // =======================
-// AUTH ROUTES
+// AUTH MIDDLEWARE
+// =======================
+function authMiddleware(req, res, next) {
+    const token = req.cookies.token;
+
+    if (!token) return res.redirect('/login');
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = users.find(u => u.id === decoded.id);
+
+        if (!user) return res.redirect('/login');
+
+        req.user = user;
+        next();
+    } catch {
+        return res.redirect('/login');
+    }
+}
+
+// =======================
+// ROUTES (FIXED)
+// =======================
+
+// ROOT → LOGIN
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// LOGIN PAGE
+app.get('/login', (req, res) => {
+    const token = req.cookies.token;
+
+    if (token) {
+        try {
+            jwt.verify(token, JWT_SECRET);
+            return res.redirect('/game');
+        } catch {}
+    }
+
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// REGISTER PAGE
+app.get('/register', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+// PROTECTED GAME PAGE
+app.get('/game', authMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// =======================
+// AUTH API
 // =======================
 
 // REGISTER
@@ -111,7 +166,7 @@ io.use((socket, next) => {
 
         socket.user = user;
         next();
-    } catch (err) {
+    } catch {
         next(new Error("Invalid token"));
     }
 });
@@ -122,7 +177,7 @@ io.use((socket, next) => {
 let multiplier = 1;
 let crashPoint = 2;
 let running = false;
-let gameInterval = null;
+let interval;
 
 // =======================
 // GAME LOGIC
@@ -130,9 +185,9 @@ let gameInterval = null;
 function generateCrashPoint() {
     const r = Math.random();
 
-    if (r < 0.5) return 1 + Math.random();       // low
-    if (r < 0.8) return 2 + Math.random() * 2;   // mid
-    return 4 + Math.random() * 2;                // high
+    if (r < 0.5) return 1 + Math.random();
+    if (r < 0.8) return 2 + Math.random() * 2;
+    return 4 + Math.random() * 2;
 }
 
 function startGame() {
@@ -142,7 +197,7 @@ function startGame() {
 
     io.emit('game:start');
 
-    gameInterval = setInterval(() => {
+    interval = setInterval(() => {
         multiplier += parseFloat(process.env.GAME_GROWTH_RATE || 0.01);
 
         io.emit('game:update', { multiplier });
@@ -159,9 +214,8 @@ function crashGame() {
 
     io.emit('game:crash', { multiplier });
 
-    clearInterval(gameInterval);
+    clearInterval(interval);
 
-    // Reset bets
     io.sockets.sockets.forEach(socket => {
         if (socket.hasBet) {
             socket.emit('bet:lost', {
@@ -187,25 +241,13 @@ io.on('connection', (socket) => {
     socket.hasBet = false;
     socket.betAmount = 0;
 
-    // PLACE BET
     socket.on('bet:place', ({ amount }) => {
         amount = parseFloat(amount);
 
-        if (!running) {
-            return socket.emit('bet:error', { error: "Game not running" });
-        }
-
-        if (socket.hasBet) {
-            return socket.emit('bet:error', { error: "Already bet" });
-        }
-
-        if (amount <= 0 || isNaN(amount)) {
-            return socket.emit('bet:error', { error: "Invalid amount" });
-        }
-
-        if (amount > socket.user.balance) {
-            return socket.emit('bet:error', { error: "Insufficient balance" });
-        }
+        if (!running) return socket.emit('bet:error', { error: "Game not running" });
+        if (socket.hasBet) return socket.emit('bet:error', { error: "Already bet" });
+        if (amount <= 0 || isNaN(amount)) return socket.emit('bet:error', { error: "Invalid amount" });
+        if (amount > socket.user.balance) return socket.emit('bet:error', { error: "Insufficient balance" });
 
         socket.user.balance -= amount;
         socket.betAmount = amount;
@@ -216,14 +258,12 @@ io.on('connection', (socket) => {
         });
     });
 
-    // CASHOUT
     socket.on('bet:cashout', () => {
         if (!running || !socket.hasBet) return;
 
         const payout = socket.betAmount * multiplier;
 
         socket.user.balance += payout;
-
         socket.hasBet = false;
 
         socket.emit('bet:cashout:confirmed', {
