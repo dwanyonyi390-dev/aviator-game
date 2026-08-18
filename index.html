@@ -1205,7 +1205,7 @@
 
                     console.log('🔌 Connecting to socket with auth...');
                     
-                   state.socket = io('https://crash-game-upgu.onrender.com', {
+                   state.socket = io('wss://crash-game-upgu.onrender.com', {
                         transports: ['websocket', 'polling'],
                         reconnection: true,
                         reconnectionAttempts: 5,
