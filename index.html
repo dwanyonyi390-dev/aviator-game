@@ -1205,14 +1205,17 @@
 
                     console.log('🔌 Connecting to socket with auth...');
                     
-                   state.socket = io('wss://crash-game-upgu.onrender.com', {
-                        transports: ['websocket', 'polling'],
-                        reconnection: true,
-                        reconnectionAttempts: 5,
-                        reconnectionDelay: 2000,
-                        auth: { token: token }
-                    });
-
+                // ============================================
+               // RELATIVE PATH SOCKET CONNECTION (RENDER FIX)
+               // ============================================
+                  state.socket = io({
+                      path: '/socket.io',      // Tells the browser to connect to the SAME domain
+                      transports: ['websocket', 'polling'], // Allows fallback if websockets fail
+                      reconnection: true,
+                      reconnectionAttempts: 5,
+                      reconnectionDelay: 2000,
+                      auth: { token: token }   // Send your login token
+                           });
                     state.socket.on('connect', () => {
                         state.isConnected = true;
                         console.log('✅ Socket connected');
