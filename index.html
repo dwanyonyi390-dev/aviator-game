@@ -1232,28 +1232,39 @@
                       reconnectionDelay: 2000,
                       auth: { token: token }   // Send your login token
                            });
-                    state.socket.on('connect', () => {
+                                        state.socket.on('connect', () => {
                         state.isConnected = true;
                         console.log('✅ Socket connected');
                         showToast('Connected!', 'success');
                         state.socket.emit('game:history');
                         updateUI();
+
+                        // --- KEEP ALIVE PING (Stops Render spin-down) ---
+                        if (window._pingInterval) clearInterval(window._pingInterval);
+                        window._pingInterval = setInterval(() => {
+                            if (state.socket && state.socket.connected) {
+                                state.socket.emit('ping', { timestamp: Date.now() });
+                            }
+                        }, 15000); // Pings every 15 seconds
+                        // ------------------------------------------------
                     });
 
                     state.socket.on('connect_error', (error) => {
                         state.isConnected = false;
                         console.error('❌ Socket connection error:', error);
+                        // Only redirect if it's an actual auth error, otherwise just try to reconnect silently
                         if (error.message === 'Authentication required') {
                             window.location.href = '/login';
                         } else {
-                            showToast('Connection failed', 'error');
+                            // Silently handle connection drops without spamming the user
+                            console.log('Connection dropped, waiting for reconnection...');
                         }
                     });
 
-                    state.socket.on('disconnect', () => {
+                                        state.socket.on('disconnect', () => {
                         state.isConnected = false;
-                        console.log('🔌 Socket disconnected');
-                        showToast('Disconnected', 'error');
+                        console.log('🔌 Socket disconnected - attempting to reconnect silently...');
+                        // REMOVED the showToast so it doesn't reset the game
                     });
 
                     state.socket.on('game:state', (data) => {
