@@ -158,7 +158,8 @@ app.post('/api/logout', (req, res) => {
 // Get current user
 app.get('/api/me', (req, res) => {
     try {
-        const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+        // Look for token in cookies OR in the Authorization header (Bearer token)
+        const token = req.cookies.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
         
         if (!token) {
             return res.status(401).json({ error: 'Not authenticated' });
