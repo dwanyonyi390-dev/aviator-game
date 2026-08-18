@@ -12,7 +12,7 @@ const server = http.createServer(app);
 
 // Middleware
 app.use(cors({ 
-    origin: '*', 
+    origin: ['http://localhost:3000', 'https://crash-game-upgu.onrender.com'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
