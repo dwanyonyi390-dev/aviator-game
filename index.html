@@ -620,12 +620,12 @@
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
     <script>
-        // ============================================
+         // ============================================
         // CHECK AUTHENTICATION
         // ============================================
         (async function checkAuth() {
             try {
-                const response = await fetch('/api/me');
+                const response = await fetch('/api/me', { credentials: 'include' });
                 if (!response.ok) {
                     window.location.href = '/login';
                     return;
@@ -650,7 +650,7 @@
         // ============================================
         async function logout() {
             try {
-                await fetch('/api/logout', { method: 'POST' });
+                await fetch('/api/logout', { method: 'POST', credentials: 'include' });
                 window.location.href = '/login';
             } catch (error) {
                 console.error('Logout error:', error);
@@ -1205,7 +1205,7 @@
 
                     console.log('🔌 Connecting to socket with auth...');
                     
-                    state.socket = io({
+                   state.socket = io('https://crash-game-upgu.onrender.com', {
                         transports: ['websocket', 'polling'],
                         reconnection: true,
                         reconnectionAttempts: 5,
