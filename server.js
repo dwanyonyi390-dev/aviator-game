@@ -158,13 +158,25 @@ app.post('/api/logout', (req, res) => {
 // Get current user
 app.get('/api/me', (req, res) => {
     try {
-        // Look for token in cookies OR in the Authorization header (Bearer token)
-        const token = req.cookies.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
-        
+        // 1. First, try to get token from Authorization header (Bearer ...)
+        let token = null;
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            token = authHeader.substring(7); // Remove "Bearer " from string
+        }
+
+        // 2. If not in header, try to get it from cookies
+        if (!token && req.cookies) {
+            token = req.cookies.token;
+        }
+
+        // 3. If still no token, user is not authenticated
         if (!token) {
-            return res.status(401).json({ error: 'Not authenticated' });
+            console.log('❌ /api/me: No token found in headers or cookies');
+            return res.status(401).json({ error: 'Not authenticated - No token' });
         }
         
+        // Verify the JWT
         const decoded = jwt.verify(token, JWT_SECRET);
         const user = users.find(u => u.id === decoded.id);
         
@@ -172,6 +184,7 @@ app.get('/api/me', (req, res) => {
             return res.status(401).json({ error: 'User not found' });
         }
         
+        // Return user data (Success!)
         res.json({
             user: {
                 id: user.id,
@@ -182,6 +195,7 @@ app.get('/api/me', (req, res) => {
         });
         
     } catch (error) {
+        console.error('❌ /api/me JWT Error:', error.message);
         res.status(401).json({ error: 'Invalid token' });
     }
 });
