@@ -625,7 +625,7 @@
         // ============================================
         (async function checkAuth() {
             try {
-                // Get the token from cookies to send in the header
+                // Helper to get token from cookie
                 const getToken = () => {
                     const cookies = document.cookie.split(';');
                     for (let cookie of cookies) {
@@ -634,7 +634,9 @@
                     }
                     return null;
                 };
+                
                 const token = getToken();
+                console.log('🔑 Token found:', token ? 'Yes' : 'No');
 
                 const response = await fetch('/api/me', { 
                     credentials: 'include',
@@ -644,9 +646,11 @@
                 });
 
                 if (!response.ok) {
+                    console.error('❌ /api/me responded with status:', response.status);
                     window.location.href = '/login';
                     return;
                 }
+                
                 const data = await response.json();
                 window.currentUser = data.user;
                 console.log('✅ Authenticated as:', data.user.username);
