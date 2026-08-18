@@ -620,12 +620,29 @@
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
     <script>
-         // ============================================
+                // ============================================
         // CHECK AUTHENTICATION
         // ============================================
         (async function checkAuth() {
             try {
-                const response = await fetch('/api/me', { credentials: 'include' });
+                // Get the token from cookies to send in the header
+                const getToken = () => {
+                    const cookies = document.cookie.split(';');
+                    for (let cookie of cookies) {
+                        const [name, value] = cookie.trim().split('=');
+                        if (name === 'token') return value;
+                    }
+                    return null;
+                };
+                const token = getToken();
+
+                const response = await fetch('/api/me', { 
+                    credentials: 'include',
+                    headers: {
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    }
+                });
+
                 if (!response.ok) {
                     window.location.href = '/login';
                     return;
@@ -644,7 +661,6 @@
                 window.location.href = '/login';
             }
         })();
-
         // ============================================
         // LOGOUT FUNCTION
         // ============================================
