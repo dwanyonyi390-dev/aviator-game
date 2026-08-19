@@ -76,11 +76,12 @@ app.post('/api/register', async (req, res) => {
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         
         // Set cookie
-        res.cookie('token', token, {
-  httpOnly: true,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  secure: true,
-  sameSite: 'none'
+       res.cookie('token', token, {
+    httpOnly: false,                     // allow JavaScript to read the token
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: process.env.NODE_ENV === 'production',   // true on Render (HTTPS)
+    sameSite: 'lax'                      // same‑origin requests will include the cookie
+});
 });
         
         res.status(201).json({
@@ -126,10 +127,10 @@ app.post('/api/login', async (req, res) => {
         
         // Set cookie
         res.cookie('token', token, {
-            httpOnly: true,
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax'
+    httpOnly: false,                     // allow JavaScript to read the token
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: process.env.NODE_ENV === 'production',   // true on Render (HTTPS)
+    sameSite: 'lax'                      // same‑origin requests will include the cookie
         });
         
         res.json({
@@ -420,19 +421,19 @@ function crash() {
     gameState.status = 'CRASHED';
     gameState.isCrashed = true;
 
-    playerBets.forEach(bet => {
-        if (!bet.cashedOut) {
-            // Find user and deduct balance
-            const user = users.find(u => u.id === bet.userId);
-            if (user) {
-                user.balance = Math.max(0, user.balance - bet.amount);
-                io.to(bet.socketId).emit('bet:lost', { 
-                    amount: bet.amount, 
-                    balance: user.balance 
-                });
-            }
+   playerBets.forEach(bet => {
+    if (!bet.cashedOut) {
+        // The bet amount has already been deducted from the balance at placement.
+        // Only notify the user that they lost.
+        const user = users.find(u => u.id === bet.userId);
+        if (user) {
+            io.to(bet.socketId).emit('bet:lost', { 
+                amount: bet.amount, 
+                balance: user.balance 
+            });
         }
-    });
+    }
+});
 
     gameState.history.push({
         roundId: gameState.roundId,
