@@ -77,11 +77,11 @@ app.post('/api/register', async (req, res) => {
         
         // Set cookie
         res.cookie('token', token, {
-            httpOnly: true,
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax'
-        });
+  httpOnly: true,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  secure: true,
+  sameSite: 'none'
+});
         
         res.status(201).json({
             success: true,
