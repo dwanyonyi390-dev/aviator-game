@@ -294,9 +294,10 @@ app.get('/health', (req, res) => {
 
 const io = socketIo(server, {
     cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
-    },
+    origin: ['http://localhost:3000', 'https://crash-game-upgu.onrender.com'],
+    methods: ['GET', 'POST'],
+    credentials: true
+}
     transports: ['websocket', 'polling'],
     allowEIO3: true
 });
