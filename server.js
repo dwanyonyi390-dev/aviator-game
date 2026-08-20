@@ -37,7 +37,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 // Initialize users file if it doesn't exist
 if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify([]));
+    fs.writeFileSync(USERS_FILE, JSON.stringify([])); // ← FIXED: empty array, not {1}
 }
 
 function getUsers() {
@@ -85,19 +85,12 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname)));
 
 // ============================================
-// MODIFIED - Use file storage instead of in-memory
-// ============================================
-// REMOVE this line:
-// const users = [];
-
-// ============================================
 // MODIFIED - Register route uses file storage
 // ============================================
 app.post('/api/register', async (req, res) => {
     try {
         const { email, password, username } = req.body;
         
-        // Validation
         if (!email || !password || !username) {
             return res.status(400).json({ error: 'All fields are required' });
         }
@@ -106,7 +99,6 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
         }
         
-        // Check if user exists - USING FILE STORAGE
         if (findUserByEmail(email)) {
             return res.status(400).json({ error: 'Email already registered' });
         }
@@ -116,10 +108,8 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Username already taken' });
         }
         
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        // Create user
         const user = {
             id: Date.now().toString(),
             email,
@@ -132,10 +122,8 @@ app.post('/api/register', async (req, res) => {
         users.push(user);
         saveUsers(users);
         
-        // Generate JWT
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         
-        // Set cookie
         res.cookie('token', token, {
             httpOnly: true,
             maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -171,22 +159,18 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password required' });
         }
         
-        // Find user - USING FILE STORAGE
         const user = findUserByEmail(email);
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        // Check password
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        // Generate JWT
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         
-        // Set cookie
         res.cookie('token', token, {
             httpOnly: true,
             maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -323,9 +307,7 @@ app.get('/', (req, res) => {
         try {
             jwt.verify(token, JWT_SECRET);
             return res.redirect('/game');
-        } catch (error) {
-            // Token invalid, show login
-        }
+        } catch (error) {}
     }
     res.sendFile(path.join(__dirname, 'login.html'));
 });
@@ -496,7 +478,6 @@ function crash() {
 
     playerBets.forEach(bet => {
         if (!bet.cashedOut) {
-            // Find user and deduct balance
             const user = findUserById(bet.userId);
             if (user) {
                 user.balance = Math.max(0, user.balance - bet.amount);
@@ -538,7 +519,6 @@ function crash() {
 io.on('connection', (socket) => {
     console.log('🟢 Player connected:', socket.user.username);
 
-    // Send current game state
     socket.emit('game:state', {
         status: gameState.status,
         roundId: gameState.roundId,
@@ -550,14 +530,12 @@ io.on('connection', (socket) => {
     socket.emit('player:data', { balance: socket.user.balance });
     socket.emit('game:history:data', { history: gameState.history });
 
-    // Place Bet
     socket.on('bet:place', (data) => {
         if (gameState.status !== 'WAITING') {
             socket.emit('bet:error', { error: 'Bets are closed for this round' });
             return;
         }
 
-        // Check if user already has a bet
         if (playerBets.find(b => b.socketId === socket.id)) {
             socket.emit('bet:error', { error: 'You already have a bet this round' });
             return;
@@ -593,7 +571,6 @@ io.on('connection', (socket) => {
         broadcastPlayerList();
     });
 
-    // Cash Out
     socket.on('bet:cashout', () => {
         const bet = playerBets.find(b => b.socketId === socket.id);
         
@@ -646,7 +623,6 @@ io.on('connection', (socket) => {
 // ============================================
 // START SERVER
 // ============================================
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📍 http://localhost:${PORT}`);
