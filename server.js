@@ -12,7 +12,7 @@ const server = http.createServer(app);
 
 // Middleware
 app.use(cors({ 
-    origin: ['http://localhost:3000', 'https://crash-game-upgu.onrender.com'],
+    origin: '*', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
@@ -76,13 +76,12 @@ app.post('/api/register', async (req, res) => {
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         
         // Set cookie
-       res.cookie('token', token, {
-    httpOnly: false,                     // allow JavaScript to read the token
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    secure: process.env.NODE_ENV === 'production',   // true on Render (HTTPS)
-    sameSite: 'lax'                      // same‑origin requests will include the cookie
-});
-});
+        res.cookie('token', token, {
+            httpOnly: true,
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
+        });
         
         res.status(201).json({
             success: true,
@@ -127,10 +126,10 @@ app.post('/api/login', async (req, res) => {
         
         // Set cookie
         res.cookie('token', token, {
-    httpOnly: false,                     // allow JavaScript to read the token
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    secure: process.env.NODE_ENV === 'production',   // true on Render (HTTPS)
-    sameSite: 'lax'                      // same‑origin requests will include the cookie
+            httpOnly: true,
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
         });
         
         res.json({
@@ -159,25 +158,12 @@ app.post('/api/logout', (req, res) => {
 // Get current user
 app.get('/api/me', (req, res) => {
     try {
-        // 1. First, try to get token from Authorization header (Bearer ...)
-        let token = null;
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            token = authHeader.substring(7); // Remove "Bearer " from string
-        }
-
-        // 2. If not in header, try to get it from cookies
-        if (!token && req.cookies) {
-            token = req.cookies.token;
-        }
-
-        // 3. If still no token, user is not authenticated
+        const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+        
         if (!token) {
-            console.log('❌ /api/me: No token found in headers or cookies');
-            return res.status(401).json({ error: 'Not authenticated - No token' });
+            return res.status(401).json({ error: 'Not authenticated' });
         }
         
-        // Verify the JWT
         const decoded = jwt.verify(token, JWT_SECRET);
         const user = users.find(u => u.id === decoded.id);
         
@@ -185,7 +171,6 @@ app.get('/api/me', (req, res) => {
             return res.status(401).json({ error: 'User not found' });
         }
         
-        // Return user data (Success!)
         res.json({
             user: {
                 id: user.id,
@@ -196,7 +181,6 @@ app.get('/api/me', (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ /api/me JWT Error:', error.message);
         res.status(401).json({ error: 'Invalid token' });
     }
 });
@@ -294,10 +278,9 @@ app.get('/health', (req, res) => {
 
 const io = socketIo(server, {
     cors: {
-    origin: ['http://localhost:3000', 'https://crash-game-upgu.onrender.com'],
-    methods: ['GET', 'POST'],
-    credentials: true
-}
+        origin: '*',
+        methods: ['GET', 'POST']
+    },
     transports: ['websocket', 'polling'],
     allowEIO3: true
 });
@@ -422,19 +405,19 @@ function crash() {
     gameState.status = 'CRASHED';
     gameState.isCrashed = true;
 
-   playerBets.forEach(bet => {
-    if (!bet.cashedOut) {
-        // The bet amount has already been deducted from the balance at placement.
-        // Only notify the user that they lost.
-        const user = users.find(u => u.id === bet.userId);
-        if (user) {
-            io.to(bet.socketId).emit('bet:lost', { 
-                amount: bet.amount, 
-                balance: user.balance 
-            });
+    playerBets.forEach(bet => {
+        if (!bet.cashedOut) {
+            // Find user and deduct balance
+            const user = users.find(u => u.id === bet.userId);
+            if (user) {
+                user.balance = Math.max(0, user.balance - bet.amount);
+                io.to(bet.socketId).emit('bet:lost', { 
+                    amount: bet.amount, 
+                    balance: user.balance 
+                });
+            }
         }
-    }
-});
+    });
 
     gameState.history.push({
         roundId: gameState.roundId,
