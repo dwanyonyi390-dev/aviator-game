@@ -1,3 +1,8 @@
+// ============================================
+// ADD THIS AT THE VERY TOP - Load .env file
+// ============================================
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -6,13 +11,71 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const fs = require('fs'); // ADD THIS for file storage
 
 const app = express();
 const server = http.createServer(app);
 
+// ============================================
+// ADD THIS - Environment Variables
+// ============================================
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-this-in-production';
+const CLIENT_URL = process.env.CLIENT_URL || '*';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// ============================================
+// ADD THIS - JSON File Storage (replaces in-memory)
+// ============================================
+const DATA_DIR = path.join(__dirname, 'data');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Initialize users file if it doesn't exist
+if (!fs.existsSync(USERS_FILE)) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify([]));
+}
+
+function getUsers() {
+    try {
+        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')) || [];
+    } catch {
+        return [];
+    }
+}
+
+function saveUsers(users) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+function findUserByEmail(email) {
+    const users = getUsers();
+    return users.find(u => u.email === email);
+}
+
+function findUserById(id) {
+    const users = getUsers();
+    return users.find(u => u.id === id);
+}
+
+function updateUser(userData) {
+    const users = getUsers();
+    const index = users.findIndex(u => u.id === userData.id);
+    if (index !== -1) {
+        users[index] = userData;
+        saveUsers(users);
+        return true;
+    }
+    return false;
+}
+
 // Middleware
 app.use(cors({ 
-    origin: '*', 
+    origin: CLIENT_URL || '*', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
@@ -21,20 +84,15 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname)));
 
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-this-in-production';
+// ============================================
+// MODIFIED - Use file storage instead of in-memory
+// ============================================
+// REMOVE this line:
+// const users = [];
 
 // ============================================
-// DATABASE (In-memory for demo - use MongoDB/PostgreSQL for production)
+// MODIFIED - Register route uses file storage
 // ============================================
-const users = [];
-const sessions = new Map();
-
-// ============================================
-// AUTH ROUTES
-// ============================================
-
-// Register
 app.post('/api/register', async (req, res) => {
     try {
         const { email, password, username } = req.body;
@@ -48,11 +106,12 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
         }
         
-        // Check if user exists
-        if (users.find(u => u.email === email)) {
+        // Check if user exists - USING FILE STORAGE
+        if (findUserByEmail(email)) {
             return res.status(400).json({ error: 'Email already registered' });
         }
         
+        const users = getUsers();
         if (users.find(u => u.username === username)) {
             return res.status(400).json({ error: 'Username already taken' });
         }
@@ -67,10 +126,11 @@ app.post('/api/register', async (req, res) => {
             username,
             password: hashedPassword,
             balance: 1000,
-            createdAt: new Date()
+            createdAt: new Date().toISOString()
         };
         
         users.push(user);
+        saveUsers(users);
         
         // Generate JWT
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
@@ -79,7 +139,7 @@ app.post('/api/register', async (req, res) => {
         res.cookie('token', token, {
             httpOnly: true,
             maxAge: 7 * 24 * 60 * 60 * 1000,
-            secure: process.env.NODE_ENV === 'production',
+            secure: NODE_ENV === 'production',
             sameSite: 'lax'
         });
         
@@ -100,7 +160,9 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// Login
+// ============================================
+// MODIFIED - Login route uses file storage
+// ============================================
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -109,8 +171,8 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password required' });
         }
         
-        // Find user
-        const user = users.find(u => u.email === email);
+        // Find user - USING FILE STORAGE
+        const user = findUserByEmail(email);
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
@@ -128,7 +190,7 @@ app.post('/api/login', async (req, res) => {
         res.cookie('token', token, {
             httpOnly: true,
             maxAge: 7 * 24 * 60 * 60 * 1000,
-            secure: process.env.NODE_ENV === 'production',
+            secure: NODE_ENV === 'production',
             sameSite: 'lax'
         });
         
@@ -149,13 +211,41 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Logout
-app.post('/api/logout', (req, res) => {
-    res.clearCookie('token');
-    res.json({ success: true, message: 'Logged out' });
+// ============================================
+// ADD THIS - Update balance endpoint
+// ============================================
+app.post('/api/balance', async (req, res) => {
+    try {
+        const token = req.cookies.token;
+        if (!token) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = findUserById(decoded.id);
+        
+        if (!user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        
+        const { balance } = req.body;
+        if (balance === undefined) {
+            return res.status(400).json({ error: 'Balance required' });
+        }
+        
+        user.balance = balance;
+        updateUser(user);
+        
+        res.json({ success: true, balance: user.balance });
+        
+    } catch (error) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
 });
 
-// Get current user
+// ============================================
+// MODIFIED - Get current user uses file storage
+// ============================================
 app.get('/api/me', (req, res) => {
     try {
         const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
@@ -165,7 +255,7 @@ app.get('/api/me', (req, res) => {
         }
         
         const decoded = jwt.verify(token, JWT_SECRET);
-        const user = users.find(u => u.id === decoded.id);
+        const user = findUserById(decoded.id);
         
         if (!user) {
             return res.status(401).json({ error: 'User not found' });
@@ -187,7 +277,6 @@ app.get('/api/me', (req, res) => {
 
 // Protected game route
 app.get('/game', (req, res) => {
-    // Check if user is authenticated via cookie
     const token = req.cookies.token;
     if (!token) {
         return res.redirect('/login');
@@ -211,7 +300,7 @@ function authenticateSocket(socket, next) {
         }
         
         const decoded = jwt.verify(token, JWT_SECRET);
-        const user = users.find(u => u.id === decoded.id);
+        const user = findUserById(decoded.id);
         
         if (!user) {
             return next(new Error('User not found'));
@@ -269,7 +358,7 @@ app.get('/index.html', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), users: users.length });
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), users: getUsers().length });
 });
 
 // ============================================
@@ -278,7 +367,7 @@ app.get('/health', (req, res) => {
 
 const io = socketIo(server, {
     cors: {
-        origin: '*',
+        origin: CLIENT_URL || '*',
         methods: ['GET', 'POST']
     },
     transports: ['websocket', 'polling'],
@@ -294,7 +383,7 @@ io.use((socket, next) => {
     
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        const user = users.find(u => u.id === decoded.id);
+        const user = findUserById(decoded.id);
         if (!user) {
             return next(new Error('User not found'));
         }
@@ -408,9 +497,10 @@ function crash() {
     playerBets.forEach(bet => {
         if (!bet.cashedOut) {
             // Find user and deduct balance
-            const user = users.find(u => u.id === bet.userId);
+            const user = findUserById(bet.userId);
             if (user) {
                 user.balance = Math.max(0, user.balance - bet.amount);
+                updateUser(user);
                 io.to(bet.socketId).emit('bet:lost', { 
                     amount: bet.amount, 
                     balance: user.balance 
@@ -485,6 +575,7 @@ io.on('connection', (socket) => {
         }
 
         socket.user.balance -= amount;
+        updateUser(socket.user);
 
         playerBets.push({
             socketId: socket.id,
@@ -522,9 +613,10 @@ io.on('connection', (socket) => {
         }
 
         const payout = bet.amount * gameState.multiplier;
-        const user = users.find(u => u.id === bet.userId);
+        const user = findUserById(bet.userId);
         if (user) {
             user.balance += payout;
+            updateUser(user);
             bet.cashedOut = true;
             
             socket.emit('bet:cashout:confirmed', {
@@ -558,7 +650,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📍 http://localhost:${PORT}`);
-    console.log(`👤 Users: ${users.length}`);
+    console.log(`👤 Users: ${getUsers().length}`);
     startCountdown();
 });
 
