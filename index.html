@@ -1262,22 +1262,15 @@ startGame(user);
             
             function setupSocket() {
                 try {
-                    // Get token from cookie
-                    const getToken = () => {
-                        const cookies = document.cookie.split(';');
-                        for (let cookie of cookies) {
-                            const [name, value] = cookie.trim().split('=');
-                            if (name === 'token') return value;
-                        }
-                        return null;
-                    };
+            
+                   // Get JWT token from localStorage
+                   const token = localStorage.getItem('token');
 
-                    const token = getToken();
-                    if (!token) {
-                        console.error('❌ No token found');
-                        window.location.href = '/login';
-                        return;
-                    }
+                     if (!token) {
+                      console.error('❌ No authentication token found');
+                      window.location.href = '/login';
+                      return;
+                       }
 
                     console.log('🔌 Connecting to socket...');
                     
