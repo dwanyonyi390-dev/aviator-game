@@ -663,25 +663,27 @@
             
             try {
                 // Check authentication
-                const response = await fetch('/api/me');
-                if (!response.ok) {
-                    console.log('❌ Not authenticated, redirecting to login...');
-                    window.location.href = '/login';
-                    return;
-                }
-                
-                const data = await response.json();
-                const user = data.user;
-                console.log('✅ Authenticated as:', user.username);
-                
-                // Hide loading screen
-                const loadingScreen = document.getElementById('loading-screen');
-                if (loadingScreen) {
-                    loadingScreen.classList.add('hidden');
-                }
-                
-                // Start the game
-                startGame(user);
+               const response = await fetch('/api/me', {
+            credentials: 'include'
+              });
+          if (!response.ok) {
+          console.log('❌ Not authenticated, redirecting to login...');
+         window.location.href = '/login';
+           return;
+            }
+
+           const data = await response.json();
+           const user = data.user;
+          console.log('✅ Authenticated as:', user.username);
+
+            // Hide loading screen
+            const loadingScreen = document.getElementById('loading-screen');
+              if (loadingScreen) {
+             loadingScreen.classList.add('hidden');
+               }
+
+// Start the game
+startGame(user);
                 
             } catch (error) {
                 console.error('❌ Auth error:', error);
