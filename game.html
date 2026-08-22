@@ -598,7 +598,6 @@
             .crash-game-btn { font-size: 11px; padding: 6px 8px; min-width: 35px; }
         }
 
-        /* Loading screen hidden by default */
         #loading-screen {
             display: flex;
             flex-direction: column;
@@ -624,18 +623,6 @@
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
-        .crash-game-btn.quick {
-             background: rgba(255, 255, 255, 0.06);
-             color: #8892b0;
-             flex: 1;
-             transition: all 0.2s ease;
-                }
-
-        .crash-game-btn.quick:hover:not(:disabled) {
-             background: rgba(255, 255, 255, 0.15);
-             color: #fff;
-             transform: translateY(-1px);
-               }
     </style>
 </head>
 <body>
@@ -663,29 +650,30 @@
             
             try {
                 // Check authentication
-                 const token = localStorage.getItem('token');
-                  const response = await fetch('/api/me', {
-                  credentials: 'include',
-                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                  });
-          if (!response.ok) {
-          console.log('❌ Not authenticated, redirecting to login...');
-         window.location.href = '/login';
-           return;
-            }
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/me', {
+                    credentials: 'include',
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                });
+                
+                if (!response.ok) {
+                    console.log('❌ Not authenticated, redirecting to login...');
+                    window.location.href = '/login';
+                    return;
+                }
 
-           const data = await response.json();
-           const user = data.user;
-          console.log('✅ Authenticated as:', user.username);
+                const data = await response.json();
+                const user = data.user;
+                console.log('✅ Authenticated as:', user.username);
 
-            // Hide loading screen
-            const loadingScreen = document.getElementById('loading-screen');
-              if (loadingScreen) {
-             loadingScreen.classList.add('hidden');
-               }
+                // Hide loading screen
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) {
+                    loadingScreen.classList.add('hidden');
+                }
 
-// Start the game
-startGame(user);
+                // Start the game
+                startGame(user);
                 
             } catch (error) {
                 console.error('❌ Auth error:', error);
@@ -699,6 +687,7 @@ startGame(user);
         async function logout() {
             try {
                 await fetch('/api/logout', { method: 'POST' });
+                localStorage.removeItem('token');
                 window.location.href = '/login';
             } catch (error) {
                 console.error('Logout error:', error);
@@ -1262,15 +1251,14 @@ startGame(user);
             
             function setupSocket() {
                 try {
-            
-                   // Get JWT token from localStorage
-                   const token = localStorage.getItem('token');
+                    // Get JWT token from localStorage
+                    const token = localStorage.getItem('token');
 
-                     if (!token) {
-                      console.error('❌ No authentication token found');
-                      window.location.href = '/login';
-                      return;
-                       }
+                    if (!token) {
+                        console.error('❌ No authentication token found');
+                        window.location.href = '/login';
+                        return;
+                    }
 
                     console.log('🔌 Connecting to socket...');
                     
