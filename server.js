@@ -1,5 +1,5 @@
 // ============================================
-// ADD THIS AT THE VERY TOP - Load .env file
+// LOAD .env file
 // ============================================
 require('dotenv').config();
 
@@ -8,72 +8,40 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const path = require('path');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-const fs = require('fs'); // ADD THIS for file storage
+const mongoose = require('mongoose');
+
+// Import Models
+const User = require('./models/User');
+const GameHistory = require('./models/GameHistory');
+const Bet = require('./models/Bet');
 
 const app = express();
 const server = http.createServer(app);
 
 // ============================================
-// ADD THIS - Environment Variables
+// Environment Variables
 // ============================================
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-this-in-production';
 const CLIENT_URL = process.env.CLIENT_URL || '*';
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/aviator';
 
 // ============================================
-// ADD THIS - JSON File Storage (replaces in-memory)
+// MongoDB Connection
 // ============================================
-const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+mongoose.connect(MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+})
+.then(() => console.log('✅ MongoDB connected'))
+.catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Initialize users file if it doesn't exist
-if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify([])); // ← FIXED: empty array, not {1}
-}
-
-function getUsers() {
-    try {
-        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')) || [];
-    } catch {
-        return [];
-    }
-}
-
-function saveUsers(users) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
-
-function findUserByEmail(email) {
-    const users = getUsers();
-    return users.find(u => u.email === email);
-}
-
-function findUserById(id) {
-    const users = getUsers();
-    return users.find(u => u.id === id);
-}
-
-function updateUser(userData) {
-    const users = getUsers();
-    const index = users.findIndex(u => u.id === userData.id);
-    if (index !== -1) {
-        users[index] = userData;
-        saveUsers(users);
-        return true;
-    }
-    return false;
-}
-
+// ============================================
 // Middleware
+// ============================================
 app.use(cors({ 
     origin: CLIENT_URL || '*', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -85,8 +53,34 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname)));
 
 // ============================================
-// MODIFIED - Register route uses file storage
+// Auth Middleware
 // ============================================
+const authMiddleware = async (req, res, next) => {
+    try {
+        const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+        
+        if (!token) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = await User.findById(decoded.id);
+        
+        if (!user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        
+        req.user = user;
+        next();
+    } catch (error) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
+};
+
+// ============================================
+// AUTH ROUTES
+// ============================================
+
 app.post('/api/register', async (req, res) => {
     try {
         const { email, password, username } = req.body;
@@ -99,30 +93,26 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
         }
         
-        if (findUserByEmail(email)) {
-            return res.status(400).json({ error: 'Email already registered' });
-        }
-        
-        const users = getUsers();
-        if (users.find(u => u.username === username)) {
+        // Check if user exists
+        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+        if (existingUser) {
+            if (existingUser.email === email) {
+                return res.status(400).json({ error: 'Email already registered' });
+            }
             return res.status(400).json({ error: 'Username already taken' });
         }
         
-        const hashedPassword = await bcrypt.hash(password, 10);
-        
-        const user = {
-            id: Date.now().toString(),
+        // Create user
+        const user = new User({
             email,
             username,
-            password: hashedPassword,
-            balance: 1000,
-            createdAt: new Date().toISOString()
-        };
+            password,
+            balance: 1000
+        });
         
-        users.push(user);
-        saveUsers(users);
+        await user.save();
         
-        const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         
         res.cookie('token', token, {
             httpOnly: true,
@@ -134,7 +124,7 @@ app.post('/api/register', async (req, res) => {
         res.status(201).json({
             success: true,
             user: {
-                id: user.id,
+                id: user._id,
                 email: user.email,
                 username: user.username,
                 balance: user.balance
@@ -148,9 +138,6 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// ============================================
-// MODIFIED - Login route uses file storage
-// ============================================
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -159,17 +146,17 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password required' });
         }
         
-        const user = findUserByEmail(email);
+        const user = await User.findOne({ email });
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        const validPassword = await bcrypt.compare(password, user.password);
+        const validPassword = await user.comparePassword(password);
         if (!validPassword) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         
         res.cookie('token', token, {
             httpOnly: true,
@@ -181,7 +168,7 @@ app.post('/api/login', async (req, res) => {
         res.json({
             success: true,
             user: {
-                id: user.id,
+                id: user._id,
                 email: user.email,
                 username: user.username,
                 balance: user.balance
@@ -195,107 +182,37 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// ============================================
-// ADD THIS - Update balance endpoint
-// ============================================
-app.post('/api/balance', async (req, res) => {
+app.post('/api/logout', (req, res) => {
+    res.clearCookie('token');
+    res.json({ success: true });
+});
+
+app.get('/api/me', authMiddleware, (req, res) => {
+    res.json({
+        user: {
+            id: req.user._id,
+            email: req.user.email,
+            username: req.user.username,
+            balance: req.user.balance
+        }
+    });
+});
+
+app.post('/api/balance', authMiddleware, async (req, res) => {
     try {
-        const token = req.cookies.token;
-        if (!token) {
-            return res.status(401).json({ error: 'Not authenticated' });
-        }
-        
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = findUserById(decoded.id);
-        
-        if (!user) {
-            return res.status(401).json({ error: 'User not found' });
-        }
-        
         const { balance } = req.body;
         if (balance === undefined) {
             return res.status(400).json({ error: 'Balance required' });
         }
         
-        user.balance = balance;
-        updateUser(user);
+        req.user.balance = balance;
+        await req.user.save();
         
-        res.json({ success: true, balance: user.balance });
-        
+        res.json({ success: true, balance: req.user.balance });
     } catch (error) {
-        res.status(401).json({ error: 'Invalid token' });
+        res.status(500).json({ error: 'Server error' });
     }
 });
-
-// ============================================
-// MODIFIED - Get current user uses file storage
-// ============================================
-app.get('/api/me', (req, res) => {
-    try {
-        const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
-        
-        if (!token) {
-            return res.status(401).json({ error: 'Not authenticated' });
-        }
-        
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = findUserById(decoded.id);
-        
-        if (!user) {
-            return res.status(401).json({ error: 'User not found' });
-        }
-        
-        res.json({
-            user: {
-                id: user.id,
-                email: user.email,
-                username: user.username,
-                balance: user.balance
-            }
-        });
-        
-    } catch (error) {
-        res.status(401).json({ error: 'Invalid token' });
-    }
-});
-
-// Protected game route
-app.get('/game', (req, res) => {
-    const token = req.cookies.token;
-    if (!token) {
-        return res.redirect('/login');
-    }
-    
-    try {
-        jwt.verify(token, JWT_SECRET);
-        res.sendFile(path.join(__dirname, 'index.html'));
-    } catch (error) {
-        res.redirect('/login');
-    }
-});
-
-// Auth check middleware for Socket.IO
-function authenticateSocket(socket, next) {
-    try {
-        const token = socket.handshake.auth.token || socket.handshake.headers.cookie?.split('token=')[1]?.split(';')[0];
-        
-        if (!token) {
-            return next(new Error('Authentication required'));
-        }
-        
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = findUserById(decoded.id);
-        
-        if (!user) {
-            return next(new Error('User not found'));
-        }
-        
-        socket.user = user;
-        next();
-    } catch (error) {
-        next(new Error('Invalid token'));
-    }
-}
 
 // ============================================
 // SERVE PAGES
@@ -334,13 +251,23 @@ app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
 });
 
+app.get('/game', authMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'game.html'));
+});
+
 app.get('/index.html', (req, res) => {
     res.redirect('/game');
 });
 
 // Health check
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), users: getUsers().length });
+app.get('/health', async (req, res) => {
+    const userCount = await User.countDocuments();
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(), 
+        users: userCount,
+        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
 });
 
 // ============================================
@@ -356,19 +283,21 @@ const io = socketIo(server, {
     allowEIO3: true
 });
 
-// Auth middleware for socket
-io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-        return next(new Error('Authentication required'));
-    }
-    
+// Socket auth middleware
+io.use(async (socket, next) => {
     try {
+        const token = socket.handshake.auth.token;
+        if (!token) {
+            return next(new Error('Authentication required'));
+        }
+        
         const decoded = jwt.verify(token, JWT_SECRET);
-        const user = findUserById(decoded.id);
+        const user = await User.findById(decoded.id);
+        
         if (!user) {
             return next(new Error('User not found'));
         }
+        
         socket.user = user;
         next();
     } catch (error) {
@@ -379,17 +308,16 @@ io.use((socket, next) => {
 // ============================================
 // GAME STATE
 // ============================================
-const gameState = {
+let gameState = {
     status: 'WAITING',
     roundId: 0,
     multiplier: 1.00,
     crashPoint: 0,
     countdown: 5,
-    history: [],
     isCrashed: false
 };
 
-const playerBets = [];
+let playerBets = []; // In-memory for active bets
 const CONFIG = {
     MAX_HISTORY: 20,
     COUNTDOWN_START: 5
@@ -405,7 +333,7 @@ function generateCrashPoint() {
 
 function broadcastPlayerList() {
     const activePlayers = playerBets.map(bet => ({
-        name: bet.username || bet.socketId.substring(0, 6),
+        name: bet.username,
         betAmount: bet.amount,
         cashedOut: bet.cashedOut || false
     }));
@@ -415,12 +343,12 @@ function broadcastPlayerList() {
 let gameInterval = null;
 let countdownInterval = null;
 
-function startCountdown() {
+async function startCountdown() {
     let count = CONFIG.COUNTDOWN_START;
     gameState.status = 'WAITING';
     gameState.countdown = count;
     gameState.isCrashed = false;
-    playerBets.length = 0;
+    playerBets = [];
 
     io.emit('game:countdown', { roundId: gameState.roundId, countdown: count });
 
@@ -438,13 +366,14 @@ function startCountdown() {
     }, 1000);
 }
 
-function startRound() {
+async function startRound() {
     gameState.roundId++;
     gameState.status = 'RUNNING';
     gameState.multiplier = 1.00;
     gameState.crashPoint = generateCrashPoint();
     gameState.isCrashed = false;
 
+    // Reset bet statuses
     playerBets.forEach(bet => { bet.cashedOut = false; });
 
     io.emit('game:start', { roundId: gameState.roundId, crashPoint: gameState.crashPoint });
@@ -472,32 +401,66 @@ function startRound() {
     }, 50);
 }
 
-function crash() {
+async function crash() {
     gameState.status = 'CRASHED';
     gameState.isCrashed = true;
 
-    playerBets.forEach(bet => {
+    // Process all active bets - deduct balance for those who didn't cash out
+    for (const bet of playerBets) {
         if (!bet.cashedOut) {
-            const user = findUserById(bet.userId);
+            const user = await User.findById(bet.userId);
             if (user) {
                 user.balance = Math.max(0, user.balance - bet.amount);
-                updateUser(user);
+                await user.save();
+                
+                // Save bet to database
+                await Bet.create({
+                    roundId: gameState.roundId,
+                    userId: bet.userId,
+                    username: bet.username,
+                    amount: bet.amount,
+                    cashedOut: false,
+                    status: 'lost'
+                });
+                
                 io.to(bet.socketId).emit('bet:lost', { 
                     amount: bet.amount, 
                     balance: user.balance 
                 });
             }
+        } else {
+            // Save cashed out bet to database
+            await Bet.create({
+                roundId: gameState.roundId,
+                userId: bet.userId,
+                username: bet.username,
+                amount: bet.amount,
+                cashedOut: true,
+                cashoutMultiplier: bet.cashoutMultiplier || gameState.crashPoint,
+                payout: bet.payout || (bet.amount * (bet.cashoutMultiplier || gameState.crashPoint)),
+                status: 'cashed'
+            });
         }
-    });
+    }
 
-    gameState.history.push({
+    // Save game history
+    await GameHistory.create({
         roundId: gameState.roundId,
         crashPoint: gameState.crashPoint,
-        timestamp: Date.now()
+        timestamp: new Date()
     });
 
-    if (gameState.history.length > CONFIG.MAX_HISTORY) {
-        gameState.history.shift();
+    // Keep only last 20 history entries
+    const historyCount = await GameHistory.countDocuments();
+    if (historyCount > CONFIG.MAX_HISTORY) {
+        const oldest = await GameHistory.find()
+            .sort({ roundId: 1 })
+            .limit(historyCount - CONFIG.MAX_HISTORY);
+        if (oldest.length > 0) {
+            await GameHistory.deleteMany({ 
+                roundId: { $lte: oldest[oldest.length - 1].roundId } 
+            });
+        }
     }
 
     io.emit('game:crash', { roundId: gameState.roundId, multiplier: gameState.crashPoint });
@@ -507,7 +470,7 @@ function crash() {
         gameInterval = null;
     }
 
-    playerBets.length = 0;
+    playerBets = [];
 
     setTimeout(() => startCountdown(), 3000);
 }
@@ -528,9 +491,16 @@ io.on('connection', (socket) => {
     });
 
     socket.emit('player:data', { balance: socket.user.balance });
-    socket.emit('game:history:data', { history: gameState.history });
 
-    socket.on('bet:place', (data) => {
+    // Send history
+    GameHistory.find()
+        .sort({ roundId: -1 })
+        .limit(CONFIG.MAX_HISTORY)
+        .then(history => {
+            socket.emit('game:history:data', { history });
+        });
+
+    socket.on('bet:place', async (data) => {
         if (gameState.status !== 'WAITING') {
             socket.emit('bet:error', { error: 'Bets are closed for this round' });
             return;
@@ -552,12 +522,13 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Deduct balance
         socket.user.balance -= amount;
-        updateUser(socket.user);
+        await socket.user.save();
 
         playerBets.push({
             socketId: socket.id,
-            userId: socket.user.id,
+            userId: socket.user._id,
             username: socket.user.username,
             amount: amount,
             cashedOut: false
@@ -571,7 +542,7 @@ io.on('connection', (socket) => {
         broadcastPlayerList();
     });
 
-    socket.on('bet:cashout', () => {
+    socket.on('bet:cashout', async () => {
         const bet = playerBets.find(b => b.socketId === socket.id);
         
         if (!bet) {
@@ -590,11 +561,15 @@ io.on('connection', (socket) => {
         }
 
         const payout = bet.amount * gameState.multiplier;
-        const user = findUserById(bet.userId);
+        const user = await User.findById(bet.userId);
+        
         if (user) {
             user.balance += payout;
-            updateUser(user);
+            await user.save();
+            
             bet.cashedOut = true;
+            bet.cashoutMultiplier = gameState.multiplier;
+            bet.payout = payout;
             
             socket.emit('bet:cashout:confirmed', {
                 multiplier: gameState.multiplier,
@@ -606,8 +581,11 @@ io.on('connection', (socket) => {
         broadcastPlayerList();
     });
 
-    socket.on('game:history', () => {
-        socket.emit('game:history:data', { history: gameState.history });
+    socket.on('game:history', async () => {
+        const history = await GameHistory.find()
+            .sort({ roundId: -1 })
+            .limit(CONFIG.MAX_HISTORY);
+        socket.emit('game:history:data', { history });
     });
 
     socket.on('disconnect', () => {
@@ -626,13 +604,14 @@ io.on('connection', (socket) => {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📍 http://localhost:${PORT}`);
-    console.log(`👤 Users: ${getUsers().length}`);
+    console.log(`📊 MongoDB: ${MONGODB_URI}`);
     startCountdown();
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down...');
     if (gameInterval) clearInterval(gameInterval);
     if (countdownInterval) clearInterval(countdownInterval);
+    await mongoose.disconnect();
     server.close(() => { console.log('✅ Closed'); process.exit(0); });
 });
