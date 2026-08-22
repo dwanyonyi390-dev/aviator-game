@@ -183,9 +183,10 @@
                 
                 const data = await response.json();
                 
-                if (response.ok) {
-                    messageEl.className = 'success-message';
-                    messageEl.textContent = '✅ Login successful! Redirecting...';
+                 if (response.ok) {
+                localStorage.setItem('token', data.token);  // ← ADD THIS LINE
+                messageEl.className = 'success-message';
+                 messageEl.textContent = '✅ Login successful! Redirecting...';
                     
                     // Redirect to game
                     setTimeout(() => {
