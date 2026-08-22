@@ -663,9 +663,11 @@
             
             try {
                 // Check authentication
-               const response = await fetch('/api/me', {
-            credentials: 'include'
-              });
+                 const token = localStorage.getItem('token');
+                  const response = await fetch('/api/me', {
+                  credentials: 'include',
+                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                  });
           if (!response.ok) {
           console.log('❌ Not authenticated, redirecting to login...');
          window.location.href = '/login';
