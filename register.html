@@ -194,10 +194,11 @@
                 
                 const data = await response.json();
                 
-                if (response.ok) {
-                    messageEl.className = 'success-message';
-                    messageEl.textContent = '✅ Account created! Redirecting...';
-                    
+                     if (response.ok) {
+                       localStorage.setItem('token', data.token);  // ← ADD THIS LINE
+                        messageEl.className = 'success-message';
+                        messageEl.textContent = '✅ Account created! Redirecting...';
+                         
                     setTimeout(() => {
                         window.location.href = '/game';
                     }, 1000);
